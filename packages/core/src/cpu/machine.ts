@@ -774,11 +774,19 @@ export class Machine {
       this.hdmaEnded, this.frames];
   }
 
-  save(): Uint8Array {
+  /** Size of a snapshot in bytes. */
+  get stateSize(): number {
+    return STATE_SIZE;
+  }
+
+  /** Snapshot the whole machine: a new copy, or into `into` (stateSize bytes, no allocation). */
+  save(into?: Uint8Array): Uint8Array {
     const dv = new DataView(this.state.buffer, this.state.byteOffset + REGS, 4 * REG_WORDS);
     this.regWords().forEach((w, k) => dv.setInt32(4 * k, w, true));
     this.apu.save();
-    return this.state.slice();
+    if (!into) return this.state.slice();
+    into.set(this.state);
+    return into;
   }
 
   load(snap: Uint8Array): void {

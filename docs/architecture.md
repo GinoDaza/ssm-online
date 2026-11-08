@@ -63,7 +63,11 @@ Local input is delayed by 1-2 frames on a LAN, 2-3 over the internet. A missing 
 is predicted, and when the real one differs, the peer restores the snapshot of that frame
 and re-simulates (at most 8 frames, then it stalls). Packets repeat the unacknowledged
 inputs, so they work over WebSocket now and over WebRTC data channels later. A periodic
-checksum detects desyncs. Transport: the server's WebSocket relay (LAN / VPN now, a cloud
+checksum detects desyncs. The session is `Rollback` (`net/rollback.ts`, in the core, so it is
+deterministic and tested without a network): `addInput(slot, frame, pad)` in frame order,
+`advance()` once per frame, snapshots in preallocated buffers (a frame costs about 2 ms, a
+snapshot 0.1 ms). `rollback.test.ts` runs two peers through a simulated network with latency,
+jitter and stalls, and checks they end in the state of a run without network. Transport: the server's WebSocket relay (LAN / VPN now, a cloud
 server later).
 
 ## Picture and sound
