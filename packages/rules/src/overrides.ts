@@ -9,8 +9,10 @@
  * instruction with the team bit hidden, so the singles path follows.
  */
 import type { Game, Machine, Runner } from '@ssm/core';
+import { createArenaObjects } from './arena.ts';
 import { teamArenaCamera } from './camera.ts';
 import { installItems } from './items.ts';
+import { installSprites } from './sprites.ts';
 import type { Ruleset } from './ruleset.ts';
 
 const TEAM_FLAG = 0x1ba0;
@@ -88,7 +90,9 @@ export function installRules(game: Game, rules: Ruleset): void {
   const r = game.runner;
   if (rules.singlesArena) {
     for (const site of ARENA_SITES) hideTeam(r, site);
+    r.override(0xc02631, (c) => ((c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0 ? createArenaObjects(c) : r.original(c, 0xc02631)));
     r.override(0xc11f71, teamArenaCamera);
     installItems(r);
+    installSprites(r);
   }
 }

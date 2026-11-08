@@ -96,6 +96,8 @@ export class Renderer {
   private readonly color = new Uint8Array(WIDTH);
   private readonly depth = new Uint8Array(WIDTH);
   /** this line's sprite pixels: CGRAM index (0 = none) and priority */
+  /** layers not drawn (TM bits: BG1-BG3 1 / 2 / 4, sprites 10), for diagnostics */
+  hide = 0;
   private readonly objColor = new Uint8Array(WIDTH);
   private readonly objPrio = new Uint8Array(WIDTH);
   /** drawing mode of each layer at each x of this line (see windows()) */
@@ -153,7 +155,7 @@ export class Renderer {
     this.color.fill(0);
     this.depth.fill(0);
 
-    const tm = io[0x2c]!;
+    const tm = io[0x2c]! & ~this.hide;
     const bgmode = io[0x05]!;
     if (tm & 0x10) {
       this.sprites(y);
@@ -312,16 +314,26 @@ export class Renderer {
       const pal = 128 + ((attr >> 1) & 7) * 16;
       const prio = (attr >> 4) & 3;
       const hpos = hposOf(s);
+      const bank = m.oamx[s] !== 0 ? m.objx : null; // the second sprite bank (Machine extension)
       let X = hpos === -256 ? 256 : hpos;
       let t = tiles;
       for (; X <= 256 && X < hpos + w; tileX = (tileX + inc) & 0x0f, X += 8) {
         if (X < -7 || --t < 0 || X === 256) continue;
         const tile = rowTile | tileX;
-        const a = (base + (tile << 5) + (tile & 0x100 ? nameSelect : 0) + 2 * (line & 7)) & 0xffff;
-        const p0 = vram[a]!;
-        const p1 = vram[(a + 1) & 0xffff]!;
-        const p2 = vram[(a + 16) & 0xffff]!;
-        const p3 = vram[(a + 17) & 0xffff]!;
+        let p0: number, p1: number, p2: number, p3: number;
+        if (bank) {
+          const a = (tile << 5) + 2 * (line & 7);
+          p0 = bank[a]!;
+          p1 = bank[a + 1]!;
+          p2 = bank[a + 16]!;
+          p3 = bank[a + 17]!;
+        } else {
+          const a = (base + (tile << 5) + (tile & 0x100 ? nameSelect : 0) + 2 * (line & 7)) & 0xffff;
+          p0 = vram[a]!;
+          p1 = vram[(a + 1) & 0xffff]!;
+          p2 = vram[(a + 16) & 0xffff]!;
+          p3 = vram[(a + 17) & 0xffff]!;
+        }
         for (let px = 0; px < 8; px++) {
           const sx = X + px;
           if (sx < 0 || sx >= WIDTH || this.objColor[sx] !== 0) continue;

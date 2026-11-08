@@ -12,6 +12,13 @@
  *
  * All state that a rollback must restore lives in one buffer (`state`), so a snapshot is one
  * copy. Registers are mirrored into it by save() / load().
+ *
+ * One extension beyond the SNES, for game modes (the original never uses it, checked over its
+ * VMAIN writes): a second sprite bank. `objx` holds 512 sprite tiles laid out as the sprite
+ * tables are (tile n at n * 32); with VMAIN ($2115) bit 6 set, VRAM writes into the sprite
+ * tables go there instead of VRAM. An OAM entry whose `oamx` byte is set takes its tiles from
+ * it. Modes set `oamxNext` while the frame builds the OAM; a DMA of the whole OAM commits it
+ * to `oamx`, so the flags change with the entries they describe.
  */
 import { APU_STATE_SIZE, Apu } from '../apu/apu.ts';
 import type { RomImage } from '../rom.ts';
@@ -25,7 +32,10 @@ const IOREG = OAM + 0x220; // last byte written to each $2100-$21FF / $4200-$43F
 const PPU = IOREG + 0x400;
 const REGS = PPU + 2 * 16;
 const REG_WORDS = 48;
-const APU = REGS + 4 * REG_WORDS;
+const OBJX = REGS + 4 * REG_WORDS;
+const OAMX = OBJX + 0x4000;
+const OAMX_NEXT = OAMX + 0x80;
+const APU = OAMX_NEXT + 0x80;
 const STATE_SIZE = APU + APU_STATE_SIZE;
 
 /** PPU registers that are more than their last written byte (Machine.ppu, 16-bit words). */
@@ -61,6 +71,11 @@ export class Machine {
   readonly ioreg = this.state.subarray(IOREG, IOREG + 0x400);
   /** PPU register state beyond ioreg (PpuReg); little-endian words in the state buffer */
   readonly ppu = new Uint16Array(this.state.buffer, PPU, 16);
+  /** the second sprite bank (extension): 512 tiles, tile n at n * 32 */
+  readonly objx = this.state.subarray(OBJX, OBJX + 0x4000);
+  /** per OAM entry: 1 = its tiles come from objx (extension); set by the next full OAM DMA */
+  readonly oamx = this.state.subarray(OAMX, OAMX + 0x80);
+  readonly oamxNext = this.state.subarray(OAMX_NEXT, OAMX_NEXT + 0x80);
   /** the sound unit (SPC700 + DSP), its state in the same buffer */
   readonly apu = new Apu(this.state.subarray(APU, STATE_SIZE));
   readonly rom: RomImage;
@@ -636,7 +651,14 @@ export class Machine {
       case 0x2118:
       case 0x2119: {
         // VRAM is only writable in vertical blank or forced blank; the address still steps
-        if ((this.ioreg[0]! & 0x80) !== 0 || this.vline >= 225) this.vram[((this.vmaddr << 1) | (lo & 1)) & 0xffff] = v;
+        if ((this.ioreg[0]! & 0x80) !== 0 || this.vline >= 225) {
+          const a = ((this.vmaddr << 1) | (lo & 1)) & 0xffff;
+          if ((this.ioreg[0x15]! & 0x40) === 0) this.vram[a] = v;
+          else {
+            const o = this.objxOffset(a);
+            if (o >= 0) this.objx[o] = v;
+          }
+        }
         const highStep = (this.ioreg[0x15]! & 0x80) !== 0;
         if ((lo === 0x2119) === highStep) {
           const inc = [1, 32, 128, 128][this.ioreg[0x15]! & 3]!;
@@ -732,6 +754,16 @@ export class Machine {
     if (lo >= 0x211b) p[PpuReg.M7_LATCH] = v;
   }
 
+  /** Offset in objx of a VRAM byte address of the sprite tables (OBSEL), or -1 outside them. */
+  objxOffset(a: number): number {
+    const obsel = this.ioreg[0x01]!;
+    const base = (obsel & 3) << 14;
+    const rel = (a - base) & 0xffff;
+    if (rel < 0x2000) return rel;
+    const rel2 = (rel - (((obsel >> 3) & 3) << 13)) & 0xffff;
+    return rel2 >= 0x2000 && rel2 < 0x4000 ? rel2 : -1;
+  }
+
   /** General DMA on the channels set in `mask` (A-bus <-> B-bus $21xx): 8 clocks a byte. */
   private dma(mask: number): void {
     this.tick(DMA_SYNC);
@@ -748,6 +780,7 @@ export class Machine {
       const fixed = (ctrl & 0x08) !== 0;
       const step = ctrl & 0x10 ? -1 : 1;
       const toA = (ctrl & 0x80) !== 0;
+      const wholeOam = bReg === 0x2104 && !toA && this.oamaddr === 0;
       this.tick(8);
       for (let k = 0; k < count; k++) {
         const b = bReg + pattern[k % pattern.length]!;
@@ -761,6 +794,7 @@ export class Machine {
       this.ioreg[r + 3] = src >> 8;
       this.ioreg[r + 5] = 0;
       this.ioreg[r + 6] = 0;
+      if (wholeOam) this.oamx.set(this.oamxNext);
     }
   }
 

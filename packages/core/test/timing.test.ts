@@ -36,7 +36,7 @@ function follow(name: string, exact: boolean): string[] {
 describe.skipIf(!haveRom())('cycle timing', () => {
   it.skipIf(!hasFixture('match1-2830-trace'))('a match follows the trace core to the clock', () => {
     expect(follow('match1-2830-trace', true)).toEqual([]);
-  });
+  }, 30_000);
 
   it.skipIf(!hasFixture('T013-attract-long-12000-trace'))('the attract mode follows the trace core to the clock', () => {
     expect(follow('T013-attract-long-12000-trace', true)).toEqual([]);

@@ -104,6 +104,18 @@ describe.skipIf(!haveRom())('team matches in the singles arena', () => {
     expect(items(fight(classicRules, 2))).toEqual([0, 0]);
   }, 60_000);
 
+  it('full arena: the side ropes are created and drawn from the second sprite bank', () => {
+    const g = fight(teamArenaRules);
+    const types = new Set<number>();
+    for (let d = 0x1200; d < 0x1a00; d += 0x40) if (g.m.wram[d]) types.add(g.m.wram[d + 1]!);
+    for (const t of [0x22, 0x24, 0x38, 0x4a]) expect(types.has(t), `pool type ${t.toString(16)}`).toBe(true);
+    // the rope tiles (list 72's DC00 part) are in the bank, the team wrestlers keep VRAM D000-FFFF
+    expect(g.m.objx.subarray(0x1c00, 0x2000).some((v) => v !== 0)).toBe(true);
+    const classic = fight(classicRules);
+    expect(classic.m.objx.every((v) => v === 0)).toBe(true);
+    expect(classic.m.oamx.every((v) => v === 0)).toBe(true);
+  }, 60_000);
+
   it('full arena: a rollback restores the camera, the items and the floor', () => {
     const start = fight(teamArenaRules, 2).m.save();
     const pad = (slot: number, f: number) => {

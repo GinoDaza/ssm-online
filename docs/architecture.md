@@ -60,6 +60,14 @@ unchanged (checked to the clock against the emulator). Besides the sites:
 - Items (`rules/src/items.ts`): the team frame order lacks the singles item steps, the throw-in
   of new items (C11007) and their tick and drawing (C2032D). They run after the team parent
   through a return address in a ROM gap (C07F00), so the call chain lives on the game's stack.
+- Arena objects (`rules/src/arena.ts`, at C02631): the match start creates the arena's objects
+  from one of two tables; this mode creates the team set plus what only singles have (the
+  ropes' scroll object 38, the side ropes 22 and their pieces 24).
+- Sprite memory (`rules/src/sprites.ts`): sprite VRAM cannot hold both environments (the four
+  team wrestlers stream into D000-FFFF, where singles keep the side-rope tiles and the item
+  frames). The singles sprite tiles go to a second sprite bank, a Machine extension the
+  original never uses: VMAIN bit 6 sends VRAM writes there, and OAM entries flagged in
+  `oamxNext` (committed by the next OAM DMA) draw from it. Items and side ropes use it.
 - Not in team play, so not in this mode: the referee (singles uses object 0C00, a wrestler in
   team play) and his count-out; a match ends by the team judge (pins, time).
 
