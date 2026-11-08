@@ -67,7 +67,18 @@ checksum detects desyncs. The session is `Rollback` (`net/rollback.ts`, in the c
 deterministic and tested without a network): `addInput(slot, frame, pad)` in frame order,
 `advance()` once per frame, snapshots in preallocated buffers (a frame costs about 2 ms, a
 snapshot 0.1 ms). `rollback.test.ts` runs two peers through a simulated network with latency,
-jitter and stalls, and checks they end in the state of a run without network. Transport: the server's WebSocket relay (LAN / VPN now, a cloud
+jitter and stalls, and checks they end in the state of a run without network.
+
+`Netplay` (`net/netplay.ts`) adds the exchange, over any in-order transport: the local pad of
+tick t is the input of frame t + delay; each input packet repeats the unacknowledged inputs
+and carries what the sender has of every slot (the acks) and how many frames it is ahead of
+each peer (time sync: the peer that runs ahead skips a tick now and then); checksums every
+60 frames are compared across peers. `netplay.test.ts` runs 2 and 3 peers that start at
+different times through a simulated relay.
+
+In the browser (`apps/web`), a room is a name on the server: the peer that joined first is
+the host, picks the input delay and starts; its `start` message fixes the slots (join order)
+for everyone. Transport: the server's WebSocket relay (LAN / VPN now, a cloud
 server later).
 
 ## Picture and sound

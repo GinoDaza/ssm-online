@@ -10,3 +10,4 @@ export * from './ppu/render.ts';
 export * from './apu/apu.ts';
 export * from './apu/sound.ts';
 export * from './net/rollback.ts';
+export * from './net/netplay.ts';

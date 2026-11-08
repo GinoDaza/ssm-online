@@ -30,3 +30,51 @@ h1 {
   color: #9aa0a8;
   text-align: center;
 }
+.panel {
+  max-width: 560px;
+  margin: 48px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+input,
+select,
+button {
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #3a3f48;
+  background: #1c1f25;
+  color: inherit;
+}
+input {
+  flex: 1;
+  min-width: 120px;
+}
+button {
+  cursor: pointer;
+  background: #2a2f38;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.members li {
+  margin: 4px 0;
+}
+.stats,
+.notice {
+  font-size: 13px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.notice,
+.stats strong {
+  color: #e8a33c;
+}
