@@ -27,9 +27,16 @@ tools/           compare-frames.ts / compare-video.ts (game vs emulator), check-
   one stream, as on hardware: the main loop, with the video IRQ (C0023A) taken at the
   instruction boundary where its H/V timer falls. A frame ends at the first instruction
   boundary after line 225 begins, as in the oracle; that can be inside the IRQ or a DMA.
-- **Overrides** (`Runner.overrides`): a TypeScript function registered at a routine's address
-  runs instead of the translated code. New modes work this way: the routines that fix the
-  player count or the ring size are rewritten to read the `Ruleset`.
+- **Overrides** (`Runner.override(pc, fn)`): a TypeScript function registered at an address
+  runs instead of the translated code. The address may be inside a routine: translated blocks
+  end before every override, so execution always reaches it. New modes work this way, in
+  `packages/rules/src/overrides.ts` (`installRules`), reading the `Ruleset`; classic installs
+  none. `npx tsx tools/disasm.ts <address> [count]` disassembles the ROM to write them.
+- **Ring-out in team matches** (`team-ring-out`): leaving the ring is a double tap toward the
+  ropes (state 2C, C13750). On the ring it ends at C13817, where team play (`BIT $1B9F; BVS`)
+  bounces instead of climbing out (states 28 / 2A); on the floor C13766 (`BIT $1BA0; BVS`)
+  keeps team play off the climb back in (state 2E). Both overrides run the same instructions,
+  at the same cost, with the team bit hidden (`rules/test/ring-out.test.ts`).
 - **Determinism**: integers only; no clocks, randomness or platform APIs in `packages/core`
   (`npm run lint:core`). Online play depends on it.
 

@@ -5,6 +5,8 @@
  */
 export interface Ruleset {
   readonly id: string;
+  /** shown in the menus */
+  readonly label: string;
   /** fighters in the match (original: 2 singles, 4 team) */
   readonly fighters: number;
   /** playfield width in pixels (original 256) */

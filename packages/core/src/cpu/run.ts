@@ -4,6 +4,10 @@
  * machine as the routine's return would (use `rts` / `rtl`). Its bus accesses spend time like
  * the original's; fetches and internal cycles it should charge with `c.tick` (an override that
  * spends less time than the original moves later IRQs earlier in the code, deterministically).
+ *
+ * An override may sit inside a routine (a branch target, or the middle of straight code):
+ * register it with override(), and translated blocks end before its address, so execution
+ * always reaches it through the dispatcher.
  */
 import type { Machine } from './machine.ts';
 import { Translator } from './compile.ts';
@@ -15,6 +19,17 @@ export type Override = (c: Machine) => number;
 export class Runner {
   readonly translator = new Translator();
   readonly overrides = new Map<number, Override>();
+
+  constructor() {
+    this.translator.stops = this.overrides;
+  }
+
+  /** Run `fn` instead of the code at `pc` (null: the original again). */
+  override(pc: number, fn: Override | null): void {
+    if (fn) this.overrides.set(pc, fn);
+    else this.overrides.delete(pc);
+    this.translator.clear();
+  }
   /** blocks executed (statistics) */
   steps = 0;
   /** blocks executed by the last run() */

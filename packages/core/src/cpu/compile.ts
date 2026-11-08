@@ -316,8 +316,18 @@ export interface BlockSource {
   source: string;
 }
 
-/** Translate the block starting at pc with widths m8 / x8 (hooked: call c.hook before each instruction). */
-export function translate(c: Machine, pc: number, m8: boolean, x8: boolean, hooked = false): BlockSource {
+/** Addresses where a block must end (overrides), so the dispatcher sees them. */
+export interface Stops {
+  has(pc: number): boolean;
+}
+
+const NO_STOPS: Stops = { has: () => false };
+
+/**
+ * Translate the block starting at pc with widths m8 / x8 (hooked: call c.hook before each
+ * instruction). The block ends before any address in `stops`.
+ */
+export function translate(c: Machine, pc: number, m8: boolean, x8: boolean, hooked = false, stops: Stops = NO_STOPS): BlockSource {
   const start = pc;
   const lines: string[] = [];
   let k = 0;
@@ -333,7 +343,7 @@ export function translate(c: Machine, pc: number, m8: boolean, x8: boolean, hook
     m8 = e.m8;
     x8 = e.x8;
     if (e.end) break;
-    if (k >= MAX_BLOCK) {
+    if (k >= MAX_BLOCK || stops.has(pc)) {
       // a width change inside the block is known statically; the dispatcher re-reads P anyway
       lines.push(`return ${hex(pc)};`);
       break;
@@ -344,6 +354,8 @@ export function translate(c: Machine, pc: number, m8: boolean, x8: boolean, hook
 
 export class Translator {
   private readonly blocks = new Map<number, Block>();
+  /** blocks end before these addresses (the Runner's overrides) */
+  stops: Stops = NO_STOPS;
   compiled = 0;
   /** diagnostics: compile a call of Machine.hook before every instruction */
   hooked = false;
@@ -355,11 +367,16 @@ export class Translator {
       if ((pc & 0xffff) < 0x8000 && (pc >>> 16 & 0x40) === 0) {
         throw new Error(`code outside ROM at ${hex(pc)} (WRAM / I/O execution is not translated)`);
       }
-      const src = translate(c, pc, c.m, c.xf, this.hooked);
+      const src = translate(c, pc, c.m, c.xf, this.hooked, this.stops);
       b = new Function('c', src.source) as Block;
       this.blocks.set(key, b);
       this.compiled++;
     }
     return b;
+  }
+
+  /** Forget the translated blocks (after the stops change). */
+  clear(): void {
+    this.blocks.clear();
   }
 }

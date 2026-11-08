@@ -4,6 +4,7 @@
  * which may re-simulate frames (the renderer and the sound are detached meanwhile).
  */
 import { Game, HEIGHT, Netplay, Renderer, RomImage, Sound, WIDTH } from '@ssm/core';
+import { installRules, type Ruleset } from '@ssm/rules';
 import { Speaker } from './audio.ts';
 import { Controls } from './input.ts';
 import type { Room } from './room.ts';
@@ -28,13 +29,14 @@ export interface Stats {
 }
 
 /** Start the game; returns the function that stops it. */
-export function play(canvas: HTMLCanvasElement, rom: Uint8Array, online: Online | null, onStats: (s: Stats) => void): () => void {
+export function play(canvas: HTMLCanvasElement, rom: Uint8Array, rules: Ruleset, online: Online | null, onStats: (s: Stats) => void): () => void {
   const controls = new Controls();
   controls.attach();
   const speaker = new Speaker();
   const ctx = canvas.getContext('2d')!;
   const image = ctx.createImageData(WIDTH, HEIGHT);
   const game = new Game(new RomImage(rom));
+  installRules(game, rules);
   const renderer = new Renderer(game.m);
   renderer.attach();
   const sound = new Sound(game.m);

@@ -13,6 +13,8 @@ export interface StartMsg {
   /** peer ids in slot order */
   players: number[];
   delay: number;
+  /** Ruleset id: every peer installs the same overrides */
+  rules: string;
 }
 
 export class Room {
@@ -71,8 +73,8 @@ export class Room {
   }
 
   /** Host: start the match for everyone in the room (the host included). */
-  start(delay: number): void {
-    const msg: StartMsg = { t: 'start', players: this.members.slice(0, 4).map((m) => m.peer), delay };
+  start(delay: number, rules: string): void {
+    const msg: StartMsg = { t: 'start', players: this.members.slice(0, 4).map((m) => m.peer), delay, rules };
     this.ws.send(JSON.stringify(msg));
     this.onStart(msg);
   }
