@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { HEIGHT, WIDTH } from '@ssm/core';
-import { play, type Online, type Stats } from './play.ts';
+import { Fit, useGameScale } from './Fit.tsx';
+import { KEY_HELP } from './input.ts';
+import { play, type Online } from './play.ts';
 import { Room, type Member } from './room.ts';
 
 type Screen = { kind: 'menu' } | { kind: 'room'; room: Room } | { kind: 'game'; online: Online | null };
@@ -20,8 +22,8 @@ export function App() {
       .catch((e: unknown) => setError(`Could not load the game: ${String(e)}`));
   }, []);
 
-  if (error) return <main className="app"><p>{error}</p></main>;
-  if (!rom) return <main className="app"><p>Loading game data…</p></main>;
+  if (error) return <Fit><section className="panel"><p>{error}</p></section></Fit>;
+  if (!rom) return <Fit><section className="panel"><p>Loading game data…</p></section></Fit>;
 
   const toMenu = () => {
     if (screen.kind === 'room') screen.room.close();
@@ -30,16 +32,22 @@ export function App() {
   };
 
   return (
-    <main className="app">
+    <>
       {screen.kind === 'menu' && (
-        <Menu
-          onLocal={() => setScreen({ kind: 'game', online: null })}
-          onJoin={(code, name) => setScreen({ kind: 'room', room: new Room(code, name) })}
-        />
+        <Fit>
+          <Menu
+            onLocal={() => setScreen({ kind: 'game', online: null })}
+            onJoin={(code, name) => setScreen({ kind: 'room', room: new Room(code, name) })}
+          />
+        </Fit>
       )}
-      {screen.kind === 'room' && <Lobby room={screen.room} onStart={(online) => setScreen({ kind: 'game', online })} onBack={toMenu} />}
+      {screen.kind === 'room' && (
+        <Fit>
+          <Lobby room={screen.room} onStart={(online) => setScreen({ kind: 'game', online })} onBack={toMenu} />
+        </Fit>
+      )}
       {screen.kind === 'game' && <GameView rom={rom} online={screen.online} onBack={toMenu} />}
-    </main>
+    </>
   );
 }
 
@@ -59,7 +67,21 @@ function Menu({ onLocal, onJoin }: { onLocal: () => void; onJoin: (code: string,
         <input placeholder="Room (SLAM)" value={code} maxLength={16} onChange={(e) => setCode(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === 'Enter' && join()} />
         <button onClick={join}>Join room</button>
       </div>
+      <Controls />
     </section>
+  );
+}
+
+function Controls() {
+  return (
+    <dl className="keys">
+      {KEY_HELP.map(([k, what]) => (
+        <div key={k}>
+          <dt>{k}</dt>
+          <dd>{what}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -91,7 +113,7 @@ function Lobby({ room, onStart, onBack }: { room: Room; onStart: (o: Online) => 
           </li>
         ))}
       </ol>
-      <p className="help">Ping to the server: {room.ping} ms. Friends join with the same room name.</p>
+      <p className="help">Friends join with the same room name · ping {room.ping} ms</p>
       {room.isHost ? (
         <div className="row">
           <label>
@@ -106,18 +128,20 @@ function Lobby({ room, onStart, onBack }: { room: Room; onStart: (o: Online) => 
         <p>Waiting for the host to start…</p>
       )}
       <button onClick={onBack}>Leave</button>
+      <Controls />
     </section>
   );
 }
 
+/** The game alone on a black screen, at an integer scale. Esc leaves. */
 function GameView({ rom, online, onBack }: { rom: Uint8Array; online: Online | null; onBack: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const scale = useGameScale();
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
     if (!canvas.current) return;
-    const stop = play(canvas.current, rom, online, setStats);
+    const stop = play(canvas.current, rom, online, (s) => s.desync >= 0 && setNotice(`Desync at frame ${s.desync}.`));
     if (online) {
       online.room.onLeave = (m) => setNotice(`${m.name} left the match.`);
       online.room.onClose = () => setNotice('Lost the connection to the server.');
@@ -125,22 +149,16 @@ function GameView({ rom, online, onBack }: { rom: Uint8Array; online: Online | n
     return stop;
   }, [rom, online]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.code === 'Escape' && onBack();
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  }, [onBack]);
+
   return (
-    <>
-      <canvas ref={canvas} className="screen" width={WIDTH} height={HEIGHT} />
-      {notice && <p className="notice">{notice}</p>}
-      {online && stats && (
-        <p className="stats">
-          Player {online.slot + 1} of {online.players} · delay {online.delay} · ping {online.room.ping} ms · frame {stats.frame} ·
-          rollbacks {stats.rollbacks} ({stats.resimulated} frames) · waits {stats.stalls} · time sync {stats.skipped}
-          {stats.desync >= 0 && <strong> · DESYNC at frame {stats.desync}</strong>}
-        </p>
-      )}
-      <p className="help">
-        Arrows move · Z = B · X = A · A = Y · S = X · Q / W = L / R · Enter = Start · Right Shift = Select · gamepads work
-        too{online ? ' (the first one plays your slot)' : ' (pads 1-4)'}. Sound starts with the first key press or click.
-      </p>
-      <p className="help"><button onClick={onBack}>{online ? 'Leave the match' : 'Menu'}</button></p>
-    </>
+    <div className="game">
+      <canvas ref={canvas} width={WIDTH} height={HEIGHT} style={{ width: WIDTH * scale, height: HEIGHT * scale }} />
+      {notice && <p className="notice">{notice} Esc to leave.</p>}
+    </div>
   );
 }

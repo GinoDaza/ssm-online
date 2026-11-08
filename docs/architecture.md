@@ -99,6 +99,14 @@ server later).
   AudioWorklet (`apps/web/src/audio.ts`), which reads a little faster or slower to follow
   the display's pace.
 
+## Client screens
+
+Menus (`apps/web`) are designed on a fixed 1600x900 screen that `Fit` (`Fit.tsx`) scales to
+the window with CSS zoom, so they fit without scrolling on 16:9 and 16:10; text is 24 px,
+never under 16 px, at that size. The game is alone on a black screen at the largest integer
+scale that fits (4x at 1920x1080, 5x at 1920x1200), and Esc leaves. Keyboard: W A S D move,
+K attacks (Y), Space jumps (B), E pins (A), Enter is START; gamepads map by position.
+
 ## Tests
 
 `npm run check` runs the typecheck, the core purity check and the tests. Tests that need the

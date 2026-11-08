@@ -1,21 +1,29 @@
 /** Local controls -> SNES pad words: the keyboard is pad 1, gamepads are pads 1-4 in order. */
 import { PAD } from '@ssm/core';
 
-/** Keyboard layout of pad 1 (KeyboardEvent.code). */
+/**
+ * Keyboard layout of pad 1 (KeyboardEvent.code). The game uses few buttons: Y attacks, B
+ * jumps, A pins (next to a downed opponent), START confirms and pauses.
+ */
 export const KEYS: Record<string, number> = {
-  ArrowUp: PAD.UP,
-  ArrowDown: PAD.DOWN,
-  ArrowLeft: PAD.LEFT,
-  ArrowRight: PAD.RIGHT,
-  KeyZ: PAD.B,
-  KeyX: PAD.A,
-  KeyA: PAD.Y,
-  KeyS: PAD.X,
-  KeyQ: PAD.L,
-  KeyW: PAD.R,
+  KeyW: PAD.UP,
+  KeyS: PAD.DOWN,
+  KeyA: PAD.LEFT,
+  KeyD: PAD.RIGHT,
+  KeyK: PAD.Y,
+  Space: PAD.B,
+  KeyE: PAD.A,
   Enter: PAD.START,
-  ShiftRight: PAD.SELECT,
 };
+
+/** What each key does, for the menu. */
+export const KEY_HELP: [string, string][] = [
+  ['W A S D', 'move'],
+  ['K', 'attack'],
+  ['Space', 'jump'],
+  ['E', 'pin'],
+  ['Enter', 'start / pause'],
+];
 
 /** Standard gamepad buttons (W3C mapping) -> SNES, by position: bottom B, right A, left Y, top X. */
 const GAMEPAD = [PAD.B, PAD.A, PAD.Y, PAD.X, PAD.L, PAD.R, 0, 0, PAD.SELECT, PAD.START, 0, 0, PAD.UP, PAD.DOWN, PAD.LEFT, PAD.RIGHT];
