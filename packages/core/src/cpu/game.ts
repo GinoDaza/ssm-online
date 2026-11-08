@@ -93,22 +93,29 @@ export class Game {
     m.s = 0x01ff;
     m.d = 0;
     m.db = 0;
-    m.ioreg[0x1f0] = 0; // APU in its IPL
+    // I/O as snes9x powers it on: WRIO and RDIO $FF, DMA registers $FF (line counters $7F)
+    m.ioreg[0x201] = 0xff;
+    m.ioreg[0x213] = 0xff;
+    for (let ch = 0; ch < 8; ch++) {
+      m.ioreg.fill(0xff, 0x300 + 16 * ch, 0x30a + 16 * ch);
+      m.ioreg[0x30a + 16 * ch] = 0x7f;
+    }
+    m.apu.reset();
     m.pc = RESET;
   }
 
   /**
-   * Start from a frame boundary of the oracle: its WRAM and CPU state (the APU driver is
-   * running, as in any state the dumps are taken from).
+   * Start from a frame boundary of the oracle: its WRAM, CPU state, the sound unit's state
+   * (the SND block of its savestate) and optionally the PPU memories.
    */
-  seed(wram: Uint8Array, cpu: CpuSnapshot, ppu?: PpuMemories): void {
+  seed(wram: Uint8Array, cpu: CpuSnapshot, apu: Uint8Array, ppu?: PpuMemories): void {
     const m = this.m;
     m.wram.set(wram);
     if (ppu && cpu.ppu) {
       m.vram.set(ppu.vram);
       m.cgram.set(ppu.cgram);
       m.oam.set(ppu.oam);
-      m.ioreg.set(ppu.regs.subarray(0, 0x40)); // PPU registers ($2140+ are the APU stand-in's)
+      m.ioreg.set(ppu.regs.subarray(0, 0x40)); // PPU registers
       const r = cpu.ppu;
       for (let n = 0; n < 4; n++) {
         m.ppu[PpuReg.HOFS + n] = r.hofs[n]!;
@@ -152,8 +159,7 @@ export class Game {
       m.ioreg.set(ch.slice(0, 11), 0x300 + 16 * k);
       m.ioreg[0x1e0 + k] = ch[11]!;
     });
-    m.ioreg[0x1f0] = 2; // APU driver running
-    m.ioreg[0x1f2] = 0;
+    m.apu.loadSnes9x(apu);
     m.ioreg[0x1f4] = 16; // serial reads after the auto-read
     m.ioreg[0x1f5] = 16;
   }
@@ -184,7 +190,6 @@ export class Game {
     const m = this.m;
     const runner = this.runner;
     for (let k = 0; k < 4; k++) m.pads[k] = pads[k] ?? 0;
-    if (m.sound !== null) m.sound.length = 0;
     m.frameDone = false;
     for (let n = 0; ; n++) {
       // an instruction boundary, in the oracle's order: timer, IRQ, I-flag change, frame end

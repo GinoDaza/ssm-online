@@ -24,9 +24,9 @@ The server prints its addresses. Friends on the same LAN or VPN (Radmin VPN work
 ## Roadmap
 
 - [x] Translated game: boots and runs, deterministic, checked against the emulator
-- [x] Cycle timing: match frames match the emulator to the clock (except where the game waits on the sound CPU)
+- [x] Cycle timing: frames match the emulator to the clock, from power-on
 - [x] Picture (PPU renderer) and controls: a local match in the browser (keyboard, gamepads)
-- [ ] Sound (SPC700 with the original driver)
+- [x] Sound: SPC700 + DSP running the original driver, sample for sample with the emulator
 - [ ] Online play with rollback netcode
 - [ ] New modes: ring-out in 2vs2, 4vs4
 

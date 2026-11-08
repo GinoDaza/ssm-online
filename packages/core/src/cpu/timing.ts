@@ -98,6 +98,7 @@ export function hEvent(m: Machine): void {
 }
 
 function lineEnd(m: Machine): void {
+  m.apu.lineEnd(m.cyc, m.hMax);
   m.cyc -= m.hMax;
   if (m.irqAt !== NEVER) m.irqAt -= m.hMax;
   if (m.brk !== STOP) m.brk = m.irqAt;

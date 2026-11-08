@@ -1,14 +1,13 @@
 /**
- * Cycle timing against the oracle: seeded from an emulator frame boundary (WRAM and CPU
- * state), the translated game must reach every later boundary on the same instruction, line
+ * Cycle timing against the oracle: seeded from an emulator frame boundary (WRAM, CPU and
+ * sound unit state), the translated game must reach every later boundary on the same instruction, line
  * and master clock, with the same WRAM. Dumps (local, git-ignored):
  *   python3 tools/oracle/dump.py --core trace --input match1 --start 2830 --frames 600 --full --out fixtures/match1-2830-trace
  *   python3 tools/oracle/dump.py --core trace --input T013-attract-long --start 12000 --frames 300 --full --out fixtures/T013-attract-long-12000-trace
  *   python3 tools/oracle/dump.py --input match1 --start 2830 --frames 600 --full --out fixtures/match1-2830-full
  * The trace core (snes9x 1bcc369) is matched to the clock. The libretro buildbot core is a
  * newer snes9x whose timing differs by a few clocks (a long DMA can then end a frame a line
- * later), so against it only WRAM outside the stack page is compared. Scenes where the game waits on the sound CPU
- * (sample uploads between rounds) need the SPC700 and are not covered yet.
+ * later), so against it only WRAM outside the stack page is compared.
  */
 import { describe, expect, it } from 'vitest';
 import { Game, Renderer, checksum, padsFromScript } from '../src/index.ts';
@@ -17,7 +16,7 @@ import { hasFixture, hasPicture, haveRom, loadFixture, loadRom } from './fixture
 function follow(name: string, exact: boolean): string[] {
   const fx = loadFixture(name);
   const g = new Game(loadRom());
-  g.seed(fx.record(0), fx.cpu(0)!);
+  g.seed(fx.record(0), fx.cpu(0)!, fx.apu);
   const bad: string[] = [];
   for (let f = 0; f < fx.frames && bad.length < 5; f++) {
     g.step(padsFromScript(fx.pads[f] ?? 'wait'));
@@ -52,7 +51,7 @@ describe.skipIf(!haveRom())('cycle timing', () => {
     it.skipIf(!hasPicture(name))(`${name}: the picture is the emulator's, pixel for pixel`, () => {
       const fx = loadFixture(name);
       const g = new Game(loadRom());
-      g.seed(fx.record(0), fx.cpu(0)!, fx.ppu);
+      g.seed(fx.record(0), fx.cpu(0)!, fx.apu, fx.ppu);
       const r = new Renderer(g.m);
       r.attach();
       const bad: string[] = [];

@@ -5,9 +5,9 @@
 ```
 apps/server      reads and checks the ROM, serves it and the client, WebSocket rooms (/ws)
 apps/web         React client: loads the ROM, runs the game
-packages/core    the game: 65816 -> JS translator, Machine, Game, the picture (ppu/)
+packages/core    the game: 65816 -> JS translator, Machine, Game, the picture (ppu/), the sound unit (apu/)
 packages/rules   game modes (Ruleset): classic, team ring-out, 4vs4
-tools/oracle     emulator dumps (WRAM + CPU state) and captured routine calls, for tests (needs ../ssm-disasm)
+tools/oracle     emulator dumps (WRAM, CPU and sound state, picture, sound) and captured routine calls, for tests (needs ../ssm-disasm)
 tools/           compare-frames.ts / compare-video.ts (game vs emulator), check-core-purity.mjs
 ```
 
@@ -19,9 +19,10 @@ tools/           compare-frames.ts / compare-video.ts (game vs emulator), check-
   widths, so no static analysis is needed.
 - **Machine** (`cpu/machine.ts`) holds the 65816 registers, 128 KiB of WRAM and the ROM. It
   also models the CPU I/O the game uses: multiply / divide, the WRAM port, DMA, and joypads
-  (auto-read and serial). A video sink records VRAM, CGRAM and OAM writes. The APU is a
-  stand-in that answers the SPC700 upload and command handshakes. All state that a rollback
-  restores lives in one buffer: `save()` / `load()`, `checksum()`.
+  (auto-read and serial). A video sink records VRAM, CGRAM and OAM writes. The sound unit
+  (`apu/`) is emulated, and the game uploads and runs its own driver on it. All state that a
+  rollback restores lives in one buffer, the sound unit's included: `save()` / `load()`,
+  `checksum()`.
 - **Game** (`cpu/game.ts`): `powerOn()`, then `step(pads)` once per video frame. Execution is
   one stream, as on hardware: the main loop, with the video IRQ (C0023A) taken at the
   instruction boundary where its H/V timer falls. A frame ends at the first instruction
@@ -44,12 +45,16 @@ its position in clocks, and blocks return at the next instruction boundary once 
 the controller IRQ (line 31) lands inside the main loop where it would on hardware. WAI,
 CLI / SEI latency and `$4210-$4212` follow the same model.
 
-Seeded from an emulator frame boundary (`tools/oracle/dump.py` records the CPU state), a
-match and the attract mode reach every later boundary on the same instruction, line and
-clock as the trace core, with identical WRAM (`packages/core/test/timing.test.ts`). The open
-gap is the sound CPU: the APU stand-in answers uploads and commands at once, while the real
-SPC700 takes time, so where the game waits on it (boot, sample uploads between rounds) it
-runs ahead of the emulator. The SPC700 closes that.
+The sound unit runs behind the CPU and catches up whenever the CPU touches its ports and at
+every line end, as in snes9x: master clocks convert to SPC clocks at 15664 / 328125, with the
+remainder carried over.
+
+Seeded from an emulator frame boundary (`tools/oracle/dump.py` records the CPU state and the
+sound unit's), a match and the attract mode reach every later boundary on the same
+instruction, line and clock as the trace core, with identical WRAM
+(`packages/core/test/timing.test.ts`). From power-on the same holds for the boot, which
+waits on the sound CPU while the game uploads the driver and its samples
+(`game.test.ts`).
 
 ## Online
 
@@ -70,8 +75,14 @@ server later).
   Pixels are RGB565 with the oracle's arithmetic, and match the emulator's frames exactly
   (`timing.test.ts`, dumps made with `--video`; `tools/compare-video.ts` writes PNGs of a
   difference). The renderer is outside the rollback state: detach it while re-simulating.
-- **Sound**: an SPC700 + DSP emulation running the game's own sound driver, fed with the
-  commands the game sends.
+- **Sound** (`apu/`): the SPC700 (`smp.ts`) and the DSP (`dsp.ts`), ported from the
+  oracle's snes9x core (bsnes's SMP, blargg's SPC_DSP), with integer maths only. The game
+  uploads its own driver and samples, then sends it commands, as on hardware. The DSP's
+  output (32040 Hz stereo) matches the emulator's sample for sample (`sound.test.ts`, dumps
+  made with `--audio`). `Sound` hands each frame's samples to the host, and like the renderer
+  it should be detached while a rollback re-simulates. The browser plays them through an
+  AudioWorklet (`apps/web/src/audio.ts`), which reads a little faster or slower to follow
+  the display's pace.
 
 ## Tests
 
@@ -80,7 +91,7 @@ ROM or emulator dumps skip without them. Make the dumps with the tools in `tools
 which use the emulator harness in `../ssm-disasm`:
 
 ```sh
-python3 tools/oracle/dump.py --input match1 --start 0 --frames 1200 --full --out fixtures/boot-full
-python3 tools/oracle/dump.py --core trace --input match1 --start 2830 --frames 600 --full --out fixtures/match1-2830-trace
+python3 tools/oracle/dump.py --core trace --input match1 --start 0 --frames 1200 --full --out fixtures/boot-trace
+python3 tools/oracle/dump.py --core trace --input match1 --start 2830 --frames 600 --full --video --audio --out fixtures/match1-2830-trace
 tools/oracle/capture.sh rom_c1_motion match1 F40-1 F12-4 F53-2
 ```

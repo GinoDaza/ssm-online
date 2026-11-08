@@ -1,8 +1,8 @@
 /**
  * The machine the translated game code runs on: a 65816 register file, the full 128 KiB WRAM,
  * the ROM (data pack), the CPU I/O registers the game uses (multiply / divide, WRAM port, DMA
- * and HDMA, H/V timer IRQ, joypads) and a video sink (VRAM, CGRAM, OAM) that the renderer
- * reads. There is no CPU interpreter here: the code runs as JavaScript compiled from the ROM
+ * and HDMA, H/V timer IRQ, joypads), a video sink (VRAM, CGRAM, OAM) that the renderer
+ * reads, and the sound unit (apu/). There is no CPU interpreter here: the code runs as JavaScript compiled from the ROM
  * (compile.ts).
  *
  * Timing (timing.ts): every bus access costs the master clocks of its memory region and the
@@ -13,6 +13,7 @@
  * All state that a rollback must restore lives in one buffer (`state`), so a snapshot is one
  * copy. Registers are mirrored into it by save() / load().
  */
+import { APU_STATE_SIZE, Apu } from '../apu/apu.ts';
 import type { RomImage } from '../rom.ts';
 import { DMA_SYNC, Ev, H_MAX, MODE_OFFSETS, NEVER, STOP, hEvent, hvbjoy, updateIrq } from './timing.ts';
 
@@ -24,7 +25,8 @@ const IOREG = OAM + 0x220; // last byte written to each $2100-$21FF / $4200-$43F
 const PPU = IOREG + 0x400;
 const REGS = PPU + 2 * 16;
 const REG_WORDS = 48;
-const STATE_SIZE = REGS + 4 * REG_WORDS;
+const APU = REGS + 4 * REG_WORDS;
+const STATE_SIZE = APU + APU_STATE_SIZE;
 
 /** PPU registers that are more than their last written byte (Machine.ppu, 16-bit words). */
 export const PpuReg = {
@@ -59,6 +61,8 @@ export class Machine {
   readonly ioreg = this.state.subarray(IOREG, IOREG + 0x400);
   /** PPU register state beyond ioreg (PpuReg); little-endian words in the state buffer */
   readonly ppu = new Uint16Array(this.state.buffer, PPU, 16);
+  /** the sound unit (SPC700 + DSP), its state in the same buffer */
+  readonly apu = new Apu(this.state.subarray(APU, STATE_SIZE));
   readonly rom: RomImage;
 
   // registers
@@ -140,8 +144,6 @@ export class Machine {
   hook: (pc: number) => void = () => {};
   /** ROM writes (the game should make none) */
   romWrites = 0;
-  /** Sound commands sent to the driver this frame (command, parameter, ...), or null. */
-  sound: number[] | null = [];
   /** Optional WRAM store log (fidelity tests): WRAM offset, byte, ... in program order. */
   log: number[] | null = null;
 
@@ -172,7 +174,7 @@ export class Machine {
 
   /** Line 0 just after the jump to the reset vector (the oracle's power-on state). */
   resetTiming(): void {
-    this.cyc = 182;
+    this.cyc = 198;
     this.vline = 0;
     this.hMax = H_MAX;
     this.event = Ev.Render;
@@ -517,46 +519,6 @@ export class Machine {
   // ---- I/O ---------------------------------------------------------------------------------
 
   /**
-   * APU ports $2140-$2143, high-level stand-in for the SPC700 until the real driver runs in an
-   * SPC emulator: it answers the IPL upload handshake (AA BB, key echo) and acknowledges every
-   * sound command at once (port 2 reads the sequence byte $03C5 the game waits for). Mode in
-   * ioreg[0x1f0]: 0 IPL, 1 transfer, 2 driver.
-   */
-  private apuRead(port: number): number {
-    const mode = this.ioreg[0x1f0]!;
-    if (mode === 0 && port < 2) return port === 0 ? 0xaa : 0xbb;
-    // driver: port 2 is the command acknowledge; a fresh driver reports 1 (C00BF7 waits for it)
-    if (mode === 2 && port === 2) return this.ioreg[0x1f2] ? 1 : this.wram[0x03c5]!;
-    return this.ioreg[0x40 + port]!;
-  }
-
-  private apuWrite(port: number, v: number): void {
-    if (port !== 0) return;
-    const mode = this.ioreg[0x1f0]!;
-    if (mode === 0) {
-      if (v === 0xcc) {
-        this.ioreg[0x1f0] = 1; // IPL: first block
-        this.ioreg[0x1f1] = 0;
-      }
-    } else if (mode === 1) {
-      if (v === this.ioreg[0x1f1]) {
-        this.ioreg[0x1f1] = (v + 1) & 0xff; // data byte: the IPL echoes the counter
-      } else if (this.ioreg[0x41] === 0) {
-        this.ioreg[0x1f0] = 2; // a key with port 1 = 0: jump to the uploaded driver
-        this.ioreg[0x1f2] = 1;
-      } else {
-        this.ioreg[0x1f1] = 0; // a key with port 1 != 0: next block
-      }
-    } else if (v === 0xf9 || v === 0xfa) {
-      this.ioreg[0x1f0] = 0; // the driver hands control back to the IPL for an upload
-      this.ioreg[0x1f2] = 0;
-    } else {
-      this.ioreg[0x1f2] = 0;
-      if (this.sound !== null) this.sound.push(v, this.ioreg[0x41]!);
-    }
-  }
-
-  /**
    * Serial joypad reads ($4016 port 1, $4017 port 2, data line D0): the pad's 16 bits (B first)
    * after a latch, then 1s, which is how the game detects a connected standard pad. No
    * multitap (D1 reads 0). Bit counters in ioreg[0x1f4 + port]; 16 after the auto-read.
@@ -579,7 +541,7 @@ export class Machine {
   }
 
   ioRead(lo: number): number {
-    if (lo >= 0x2140 && lo < 0x2180) return this.apuRead(lo & 3);
+    if (lo >= 0x2140 && lo < 0x2180) return this.apu.read(lo & 3, this.cyc);
     if (lo === 0x4016 || lo === 0x4017) return this.serialRead(lo - 0x4016);
     switch (lo) {
       case 0x2180: {
@@ -639,7 +601,7 @@ export class Machine {
       this.ioreg[0x200 + (lo - 0x4200)] = v;
     }
     if (lo >= 0x2140 && lo < 0x2144) {
-      this.apuWrite(lo & 3, v);
+      this.apu.write(lo & 3, v, this.cyc);
       return;
     }
     if ((lo >= 0x210d && lo <= 0x2114) || (lo >= 0x211b && lo <= 0x2120)) {
@@ -815,11 +777,13 @@ export class Machine {
   save(): Uint8Array {
     const dv = new DataView(this.state.buffer, this.state.byteOffset + REGS, 4 * REG_WORDS);
     this.regWords().forEach((w, k) => dv.setInt32(4 * k, w, true));
+    this.apu.save();
     return this.state.slice();
   }
 
   load(snap: Uint8Array): void {
     this.state.set(snap);
+    this.apu.load();
     const dv = new DataView(this.state.buffer, this.state.byteOffset + REGS, 4 * REG_WORDS);
     const w = (k: number) => dv.getInt32(4 * k, true);
     this.a = w(0);

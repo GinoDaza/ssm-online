@@ -13,7 +13,7 @@ const fx = loadFixture(name);
 const cpu = fx.cpu(0);
 if (!cpu) throw new Error(`${name}: no CPU state, make the dump again with tools/oracle/dump.py`);
 const g = new Game(loadRom());
-g.seed(fx.record(0), cpu);
+g.seed(fx.record(0), cpu, fx.apu);
 const N = Math.min(fx.frames, Number(process.argv[3] ?? 600));
 const shift = Number(process.env.SHIFT ?? 0);
 const hex = (v: number) => v.toString(16);

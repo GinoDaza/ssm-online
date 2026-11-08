@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Game, HEIGHT, Renderer, RomImage, WIDTH } from '@ssm/core';
+import { Game, HEIGHT, Renderer, RomImage, Sound, WIDTH } from '@ssm/core';
+import { Speaker } from './audio.ts';
 import { Controls } from './input.ts';
 
 const FRAME_MS = 1000 / 60;
 
-/** Loads the ROM from the server and runs the game at 60 frames a second, drawn on a canvas. */
+/** Loads the ROM from the server and runs the game at 60 frames a second: picture on a canvas, sound through Web Audio. */
 export function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState('Loading game data…');
@@ -14,6 +15,7 @@ export function App() {
     let stopped = false;
     const controls = new Controls();
     controls.attach();
+    const speaker = new Speaker();
     fetch('/api/rom')
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((buf) => {
@@ -23,6 +25,9 @@ export function App() {
         const game = new Game(new RomImage(new Uint8Array(buf)));
         const renderer = new Renderer(game.m);
         renderer.attach();
+        const sound = new Sound(game.m);
+        sound.attach();
+        speaker.start().catch((e: unknown) => console.warn('no sound:', e));
         game.powerOn();
         setStatus('');
         let last = performance.now();
@@ -34,6 +39,7 @@ export function App() {
           while (acc >= FRAME_MS) {
             acc -= FRAME_MS;
             game.step(controls.read());
+            speaker.push(sound.take());
             ran = true;
           }
           if (ran) {
@@ -49,6 +55,7 @@ export function App() {
       stopped = true;
       cancelAnimationFrame(raf);
       controls.detach();
+      speaker.stop();
     };
   }, []);
 
@@ -58,7 +65,7 @@ export function App() {
       {status && <p>{status}</p>}
       <p className="help">
         Arrows move · Z = B · X = A · A = Y · S = X · Q / W = L / R · Enter = Start · Right Shift = Select · gamepads
-        work too (pads 1-4). No sound yet.
+        work too (pads 1-4). Sound starts with the first key press or click.
       </p>
     </main>
   );

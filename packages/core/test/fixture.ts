@@ -23,6 +23,8 @@ export interface Fixture {
   pads: string[];
   /** record k = WRAM before frame start + k */
   record(k: number): Uint8Array;
+  /** the sound unit's state at record 0 (snes9x SND block) */
+  apu: Uint8Array;
   /** CPU state of record k (dumps made since the dump recorded it) */
   cpu(k: number): CpuSnapshot | undefined;
   /** PPU memories of record 0 and the emulator's picture of frame k (1..frames), dumps made with --video */
@@ -33,7 +35,7 @@ export interface Fixture {
 type CpuJson = Omit<CpuSnapshot, 'io'> & { io: string };
 
 export function hasFixture(name: string): boolean {
-  return existsSync(resolve(ROOT, 'fixtures', name + '.wram'));
+  return existsSync(resolve(ROOT, 'fixtures', name + '.wram')) && existsSync(resolve(ROOT, 'fixtures', name + '.apu'));
 }
 
 /** The dump also recorded the PPU state and the emulator's pictures (dump.py --video). */
@@ -58,6 +60,7 @@ export function loadFixture(name: string): Fixture {
     start: meta.start,
     frames: meta.frames,
     pads: meta.pads,
+    apu: new Uint8Array(readFileSync(base + '.apu')),
     record: (k) => data.subarray(k * meta.record, (k + 1) * meta.record),
     ppu: ppuBlob && {
       vram: ppuBlob.subarray(0, 0x10000),

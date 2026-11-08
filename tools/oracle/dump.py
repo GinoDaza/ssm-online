@@ -8,9 +8,14 @@ git-ignored): it is game state, not something to publish.
   python3 tools/oracle/dump.py --input R-vs2-1 --start 3000 --frames 300 --out fixtures/vs2-3000
   python3 tools/oracle/dump.py --core trace --input match1 --start 2830 --frames 600 --full --out fixtures/match1-2830-trace
 
+<out>.apu is the sound unit's state at record 0: the SND block of the emulator's savestate
+(snes9x S9xAPUSaveState: SMP RAM and registers, DSP, APU clocks).
+
 --video also writes <out>.ppu, the PPU state of record 0 (VRAM 64 KiB, CGRAM 512 bytes, OAM 544
 bytes, registers $2100-$21FF; the latched values are in the JSON as `ppu`), and <out>.video: the emulator's picture of each played frame, 256 x 224 RGB565
-pixels (little-endian), frames 1..N.
+pixels (little-endian), frames 1..N. --audio writes <out>.audio: the emulator's sound output while
+the frames play, 32040 Hz stereo s16le (the DSP's samples through snes9x's resampler at ratio
+1, which only delays them).
 
 --core trace uses the trace core (snes9x 1bcc369, built by ssm-disasm's tools/tracecore/build.sh)
 instead of the libretro buildbot core: the translated game follows its timing to the clock.
@@ -91,6 +96,7 @@ def main():
     ap.add_argument('--full', action='store_true', help='all 128 KiB of WRAM per record (default: low 8 KiB)')
     ap.add_argument('--core', choices=CORES, default='plain', help='emulator core (default: plain)')
     ap.add_argument('--video', action='store_true', help='also write the picture of each frame (<out>.video)')
+    ap.add_argument('--audio', action='store_true', help='also write the sound of the played frames (<out>.audio)')
     a = ap.parse_args()
     size = 0x20000 if a.full else WRAM_LOW
 
@@ -108,11 +114,14 @@ def main():
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     cpu = [cpu_state(emu)]
+    open(a.out + '.apu', 'wb').write(blocks(emu.state())['SND'])
     video = None
     if a.video:
         blob, cpu[0]['ppu'] = ppu_state(emu)
         open(a.out + '.ppu', 'wb').write(blob)
         video = open(a.out + '.video', 'wb')
+    if a.audio:
+        emu.audio = bytearray()
     with open(a.out + '.wram', 'wb') as f:
         f.write(emu.memory()[:size])
         for k in range(a.start, a.start + a.frames):
@@ -126,6 +135,8 @@ def main():
                 video.write(b''.join(data[y * pitch:y * pitch + 2 * w] for y in range(h)))
     if video:
         video.close()
+    if a.audio:
+        open(a.out + '.audio', 'wb').write(bytes(emu.audio))
     meta = dict(input=os.path.relpath(path, DISASM), start=a.start, frames=a.frames,
                 record=size, core=core_name, pads=frames[a.start:a.start + a.frames],
                 cpu=cpu)

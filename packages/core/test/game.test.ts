@@ -1,6 +1,6 @@
-/** The whole game: boots, is deterministic, and follows the emulator through boot. */
+/** The whole game: boots, is deterministic, and follows the emulator from power-on. */
 import { describe, expect, it } from 'vitest';
-import { Game, checksum } from '../src/index.ts';
+import { Game, checksum, padsFromScript } from '../src/index.ts';
 import { hasFixture, haveRom, loadFixture, loadRom } from './fixture.ts';
 
 describe.skipIf(!haveRom())('game', () => {
@@ -14,23 +14,24 @@ describe.skipIf(!haveRom())('game', () => {
     expect(run()).toBe(run());
   });
 
-  // python3 tools/oracle/dump.py --input match1 --start 0 --frames 1200 --full --out fixtures/boot-full
-  it.skipIf(!hasFixture('boot-full'))('boot WRAM matches the emulator within 4 bytes', () => {
-    // the APU stand-in answers uploads at once, so the emulator runs a few frames behind
-    const fx = loadFixture('boot-full');
+  // python3 tools/oracle/dump.py --core trace --input match1 --start 0 --frames 1200 --full --out fixtures/boot-trace
+  it.skipIf(!hasFixture('boot-trace'))('boots as the trace core does, to the clock (sound driver uploads included)', () => {
+    const fx = loadFixture('boot-trace');
     const g = new Game(loadRom());
     g.powerOn();
-    for (let f = 1; f <= 100; f++) {
-      g.step([0, 0, 0, 0]);
-      if (f !== 60 && f !== 100) continue;
-      let best = Infinity;
-      for (let k = f - 6; k <= f + 6; k++) {
-        const r = fx.record(k);
-        let n = 0;
-        for (let i = 0; i < r.length; i++) if (r[i] !== g.m.wram[i] && !(i >= 0x100 && i < 0x300)) n++;
-        best = Math.min(best, n);
-      }
-      expect(best, `frame ${f}`).toBeLessThanOrEqual(4);
+    const bad: string[] = [];
+    for (let f = 0; f < fx.frames && bad.length < 5; f++) {
+      g.step(padsFromScript(fx.pads[f] ?? 'wait'));
+      const want = fx.record(f + 1);
+      const c = fx.cpu(f + 1)!;
+      const m = g.m;
+      let n = 0;
+      for (let i = 0; i < want.length; i++) if (m.wram[i] !== want[i]) n++;
+      const at = `pc ${m.pc.toString(16)} line ${m.vline} clock ${m.cyc}`;
+      const wantAt = `pc ${((c.pb << 16) | c.pc).toString(16)} line ${c.v} clock ${c.h}`;
+      if (n) bad.push(`frame ${f + 1}: ${n} WRAM bytes differ`);
+      else if (at !== wantAt) bad.push(`frame ${f + 1}: ${at}, emulator ${wantAt}`);
     }
+    expect(bad).toEqual([]);
   });
 });

@@ -7,3 +7,5 @@ export * from './cpu/run.ts';
 export * from './cpu/game.ts';
 export * from './cpu/pads.ts';
 export * from './ppu/render.ts';
+export * from './apu/apu.ts';
+export * from './apu/sound.ts';

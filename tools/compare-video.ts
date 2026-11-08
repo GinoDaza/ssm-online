@@ -15,7 +15,7 @@ const fx = loadFixture(name);
 const N = Math.min(fx.frames, Number(process.argv[3] ?? fx.frames));
 const g = new Game(loadRom());
 if (!fx.ppu) throw new Error(`${name}: no picture, make the dump again with --video`);
-g.seed(fx.record(0), fx.cpu(0)!, fx.ppu);
+g.seed(fx.record(0), fx.cpu(0)!, fx.apu, fx.ppu);
 const r = new Renderer(g.m);
 r.attach();
 const px = WIDTH * HEIGHT;
