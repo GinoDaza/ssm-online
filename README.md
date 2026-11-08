@@ -28,6 +28,7 @@ The server prints its addresses. Friends on the same LAN or VPN (Radmin VPN work
 - [x] Picture (PPU renderer) and controls: a local match in the browser (keyboard, gamepads)
 - [x] Sound: SPC700 + DSP running the original driver, sample for sample with the emulator
 - [ ] Online play with rollback netcode
-- [ ] New modes: ring-out in 2vs2, 4vs4
+- [x] 2 vs 2 in the full arena: out of the ring, on the floor, with the ringside items
+- [ ] Wider screen; 4 vs 4
 
 See `docs/architecture.md` for how it works.

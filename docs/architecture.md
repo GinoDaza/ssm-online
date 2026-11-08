@@ -6,9 +6,9 @@
 apps/server      reads and checks the ROM, serves it and the client, WebSocket rooms (/ws)
 apps/web         React client: loads the ROM, runs the game
 packages/core    the game: 65816 -> JS translator, Machine, Game, the picture (ppu/), the sound unit (apu/)
-packages/rules   game modes (Ruleset): classic, team ring-out, 4vs4
+packages/rules   game modes (Ruleset) and their overrides: classic, 2 vs 2 in the full arena
 tools/oracle     emulator dumps (WRAM, CPU and sound state, picture, sound) and captured routine calls, for tests (needs ../ssm-disasm)
-tools/           compare-frames.ts / compare-video.ts (game vs emulator), check-core-purity.mjs
+tools/           compare-frames.ts / compare-video.ts (game vs emulator), disasm.ts (ROM), check-core-purity.mjs
 ```
 
 ## The game (packages/core)
@@ -32,13 +32,41 @@ tools/           compare-frames.ts / compare-video.ts (game vs emulator), check-
   end before every override, so execution always reaches it. New modes work this way, in
   `packages/rules/src/overrides.ts` (`installRules`), reading the `Ruleset`; classic installs
   none. `npx tsx tools/disasm.ts <address> [count]` disassembles the ROM to write them.
-- **Ring-out in team matches** (`team-ring-out`): leaving the ring is a double tap toward the
-  ropes (state 2C, C13750). On the ring it ends at C13817, where team play (`BIT $1B9F; BVS`)
-  bounces instead of climbing out (states 28 / 2A); on the floor C13766 (`BIT $1BA0; BVS`)
-  keeps team play off the climb back in (state 2E). Both overrides run the same instructions,
-  at the same cost, with the team bit hidden (`rules/test/ring-out.test.ts`).
+  `Runner.split` ends blocks at an address without replacing code and `Runner.original` runs
+  the original code up to the next block end, so an override can wrap one original instruction.
 - **Determinism**: integers only; no clocks, randomness or platform APIs in `packages/core`
   (`npm run lint:core`). Online play depends on it.
+
+## Modes
+
+`packages/rules`: a `Ruleset` per mode, `installRules(game, rules)` before the game runs. Every
+peer of a room installs the same one.
+
+**2 vs 2 in the full arena** (`team-arena`, `Ruleset.singlesArena`). A team match (four
+wrestlers, the original team logic: partners, targets, HUD, judge) played in the singles
+environment: the wide arena with the floor around the ring, the front crowd and the apron,
+going out and back in, the ringside items. The game picks its environment by `$1BA0` bit 6
+(team), read at about a hundred sites; all were read (`tools/disasm.ts`, `../ssm-disasm`
+notes) and sorted into team logic (kept) and environment (`ARENA_SITES` in
+`rules/src/overrides.ts`, each with the reason). An environment site runs the original
+instruction with the team bit hidden, so the singles path follows; singles matches are
+unchanged (checked to the clock against the emulator). Besides the sites:
+
+- Camera (`rules/src/camera.ts`, at C11F71): the team camera frames the four wrestlers but
+  stays in the narrow team arena (x 60..120, y up to 68). It keeps the team framing with the
+  singles arena's limits (x 20..160, y 0..C0) and, with someone on the floor, the singles floor
+  rule for y. Not the singles snap to an arena side: with four wrestlers it would drop the
+  others from the picture; the team pull into the screen (C18E49) keeps everyone visible.
+- Items (`rules/src/items.ts`): the team frame order lacks the singles item steps, the throw-in
+  of new items (C11007) and their tick and drawing (C2032D). They run after the team parent
+  through a return address in a ROM gap (C07F00), so the call chain lives on the game's stack.
+- Not in team play, so not in this mode: the referee (singles uses object 0C00, a wrestler in
+  team play) and his count-out; a match ends by the team judge (pins, time).
+
+`rules/test/team-arena.test.ts` drives player 1 with a bot (`test/bot.ts`: goals checked
+against WRAM) through a Team Battle Royal reached from power-on: classic keeps the ropes shut,
+the full arena lets him out and back in with the camera on the floor, the items run, and a
+rollback in such a match restores the same state.
 
 ## Timing
 

@@ -1,16 +1,21 @@
 /**
  * Game modes. The translated game is the original; a Ruleset says where a mode departs from
  * it, and the routines it touches are replaced by TypeScript overrides that read it
- * (Runner.overrides, docs/architecture.md). Classic must change nothing.
+ * (overrides.ts, docs/architecture.md). Classic must change nothing.
  */
 export interface Ruleset {
   readonly id: string;
   /** shown in the menus */
   readonly label: string;
-  /** fighters in the match (original: 2 singles, 4 team) */
+  /** fighters in a team match (original 4; singles are always 2) */
   readonly fighters: number;
+  /**
+   * Team matches in the singles environment: the singles arena (with the floor around the
+   * ring and the front crowd), its camera, the ringside items and the ring exits. The team
+   * logic stays (four wrestlers, partners and targets, HUD, judge). Original: false, the team
+   * arena ends at the ring and nobody leaves it.
+   */
+  readonly singlesArena: boolean;
   /** playfield width in pixels (original 256) */
   readonly screenWidth: number;
-  /** may a fighter leave the ring through the ropes? (original: singles only) */
-  canLeaveRing(team: boolean): boolean;
 }

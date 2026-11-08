@@ -19,9 +19,25 @@ export type Override = (c: Machine) => number;
 export class Runner {
   readonly translator = new Translator();
   readonly overrides = new Map<number, Override>();
+  /** addresses where translated blocks end without an override (see split) */
+  private readonly splits = new Set<number>();
 
   constructor() {
-    this.translator.stops = this.overrides;
+    this.translator.stops = { has: (pc) => this.overrides.has(pc) || this.splits.has(pc) };
+  }
+
+  /** End translated blocks at `pc` too, so an override can run the code before it on its own. */
+  split(pc: number): void {
+    this.splits.add(pc);
+    this.translator.clear();
+  }
+
+  /**
+   * Run the original code at `pc` up to the next block end (an override or a split), as the
+   * translation would: for overrides that wrap one original instruction.
+   */
+  original(c: Machine, pc: number): number {
+    return this.translator.get(c, pc)(c);
   }
 
   /** Run `fn` instead of the code at `pc` (null: the original again). */

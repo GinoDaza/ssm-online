@@ -1,11 +1,10 @@
 import type { Ruleset } from './ruleset.ts';
 
+/** The original game. */
 export const classicRules: Ruleset = {
   id: 'classic',
   label: 'Classic',
-  fighters: 2,
+  fighters: 4,
+  singlesArena: false,
   screenWidth: 256,
-  canLeaveRing: (team) => !team,
 };
-
-export const classicTeamRules: Ruleset = { ...classicRules, id: 'classic-team', label: 'Classic team', fighters: 4 };
