@@ -6,3 +6,4 @@ export * from './cpu/compile.ts';
 export * from './cpu/run.ts';
 export * from './cpu/game.ts';
 export * from './cpu/pads.ts';
+export * from './ppu/render.ts';

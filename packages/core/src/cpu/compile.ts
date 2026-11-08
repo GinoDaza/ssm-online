@@ -4,6 +4,12 @@
  * instruction is decoded with its real widths, observed or not). Blocks are cached by
  * (address, M, X). A block returns the address of the next block.
  *
+ * Timing: each instruction first spends its opcode / operand fetches and internal cycles
+ * (`c.tick`); its data accesses spend their own through the Machine's bus. After each
+ * instruction the block returns early when `c.cyc >= c.brk` (an IRQ is due, the frame ended,
+ * or the I flag changed), so interrupts land on the instruction boundary they would on
+ * hardware. Cycle counts follow the oracle (snes9x), which follows the WDC datasheet.
+ *
  * Determinism: the generated code is integer-only and reads nothing but the Machine.
  */
 import { romOffset } from '../rom.ts';
@@ -47,8 +53,11 @@ export function decodeAt(c: Machine, pc: number, m8: boolean, x8: boolean): Deco
   return { pc, op, mn, mode, n, len: 1 + size };
 }
 
-/** Effective address expression and whether 16-bit accesses wrap in bank 0. */
-function ea(mode: Mode, n: number): [string, boolean] {
+/**
+ * Effective address expression and whether 16-bit accesses wrap in bank 0. `always` is true
+ * when an indexed mode spends its extra cycle whatever the page (writes, 16-bit index).
+ */
+function ea(mode: Mode, n: number, always = true): [string, boolean] {
   switch (mode) {
     case 'dp':
       return [`((c.d + ${hex(n)}) & 0xffff)`, true];
@@ -61,7 +70,7 @@ function ea(mode: Mode, n: number): [string, boolean] {
     case 'indl':
       return [`c.read24z(c.d + ${hex(n)})`, false];
     case 'indy':
-      return [`((((c.db << 16) | c.read16z(c.d + ${hex(n)})) + c.y) & 0xffffff)`, false];
+      return [`c.indexed((c.db << 16) | c.read16z(c.d + ${hex(n)}), c.y, ${always})`, false];
     case 'indly':
       return [`((c.read24z(c.d + ${hex(n)}) + c.y) & 0xffffff)`, false];
     case 'indx':
@@ -69,9 +78,9 @@ function ea(mode: Mode, n: number): [string, boolean] {
     case 'abs':
       return [`((c.db << 16) | ${hex(n)})`, false];
     case 'absx':
-      return [`((((c.db << 16) | ${hex(n)}) + c.x) & 0xffffff)`, false];
+      return [`c.indexed((c.db << 16) | ${hex(n)}, c.x, ${always})`, false];
     case 'absy':
-      return [`((((c.db << 16) | ${hex(n)}) + c.y) & 0xffffff)`, false];
+      return [`c.indexed((c.db << 16) | ${hex(n)}, c.y, ${always})`, false];
     case 'long':
       return [hex(n), false];
     case 'longx':
@@ -83,6 +92,30 @@ function ea(mode: Mode, n: number): [string, boolean] {
     default:
       throw new Error(`no effective address for mode ${mode}`);
   }
+}
+
+/** Internal cycles of an addressing mode (6 master clocks each); DL = +1 when D & $FF != 0. */
+const MODE_IO: Partial<Record<Mode, number>> = { dpx: 1, dpy: 1, indx: 1, sr: 1, sry: 2 };
+const DL_MODES = new Set<Mode>(['dp', 'dpx', 'dpy', 'ind', 'indl', 'indy', 'indly', 'indx']);
+/** Internal cycles of an instruction beyond its addressing mode. */
+const OP_IO: Record<string, number> = {
+  XBA: 2, PLA: 2, PLX: 2, PLY: 2, PLP: 2, PLB: 2, PLD: 2, RTL: 2, RTI: 2, RTS: 3,
+};
+for (const mn of ['CLC', 'SEC', 'CLI', 'SEI', 'CLD', 'SED', 'CLV', 'TAX', 'TAY', 'TXA', 'TYA', 'TXY', 'TYX',
+  'TSX', 'TXS', 'TCD', 'TDC', 'TCS', 'TSC', 'INX', 'INY', 'DEX', 'DEY', 'NOP', 'XCE', 'REP', 'SEP', 'PHA',
+  'PHX', 'PHY', 'PHP', 'PHB', 'PHD', 'PHK', 'BRA', 'BRL', 'JSR', 'JSL', 'WAI', ...RMW]) {
+  OP_IO[mn] = 1;
+}
+
+/** Clocks an instruction spends before its data accesses: fetches + internal cycles. */
+function fetchAndIo(d: Decoded): string {
+  const fastBank = (d.pc & 0x408000) !== 0 && (d.pc & 0x800000) !== 0;
+  let io = (MODE_IO[d.mode] ?? 0) + (OP_IO[d.mn] ?? 0);
+  if (d.mn === 'JMP' && d.mode === 'absindx') io++;
+  const parts = [fastBank ? `${d.len} * c.fast` : `${8 * d.len}`];
+  if (io) parts.push(`${6 * io}`);
+  if (DL_MODES.has(d.mode)) parts.push('(c.d & 0xff ? 6 : 0)');
+  return parts.join(' + ');
 }
 
 interface Emit {
@@ -103,7 +136,7 @@ export function emit(d: Decoded, m8: boolean, x8: boolean): Emit {
   const imm = mode === 'immM' || mode === 'immX';
   const R = () => {
     if (imm) return hex(n);
-    const [e, z] = ea(mode, n);
+    const [e, z] = ea(mode, n, !x8);
     return `c.rm(${e}, ${W}, ${z})`;
   };
   const out = (code: string, end = false, mm = m8, xx = x8): Emit => ({ code, end, m8: mm, x8: xx });
@@ -112,7 +145,7 @@ export function emit(d: Decoded, m8: boolean, x8: boolean): Emit {
   if (mn in ALU) return out(`c.${ALU[mn]}(${R()}, ${W});`);
   if (mn in BRANCH) {
     const target = bank | ((d.pc + d.len + rel(n, 8)) & 0xffff);
-    return out(`if (${BRANCH[mn]}) return ${hex(target)};`);
+    return out(`if (${BRANCH[mn]}) { c.tick(6); return ${hex(target)}; }`);
   }
   if (RMW.has(mn)) {
     const fn = mn === 'DEC' ? 'dec_' : mn.toLowerCase();
@@ -221,9 +254,9 @@ export function emit(d: Decoded, m8: boolean, x8: boolean): Emit {
     case 'SEC':
       return out('c.c = true;');
     case 'CLI':
-      return out('c.i = false;');
+      return out('c.changeI(1);');
     case 'SEI':
-      return out('c.i = true;');
+      return out('c.changeI(2);');
     case 'CLD':
       return out('c.dec = false;');
     case 'SED':
@@ -259,8 +292,12 @@ export function emit(d: Decoded, m8: boolean, x8: boolean): Emit {
     case 'RTI':
       return out('{ c.setP(c.pull8()); const lo = c.pull16(); const b = c.pull8(); return (b << 16) | lo; }', true);
     case 'MVN':
-    case 'MVP':
-      return out(`c.move(${hex(n & 0xff)}, ${hex(n >> 8)}, ${mn === 'MVN' ? 1 : -1});`);
+    case 'MVP': {
+      // one byte per execution, as on hardware: an IRQ can come between two bytes
+      const fetch = fetchAndIo(d);
+      const move = `c.moveByte(${hex(n & 0xff)}, ${hex(n >> 8)}, ${mn === 'MVN' ? 1 : -1})`;
+      return out(`for (;;) { c.tick(${fetch}); if (${move}) return ${hex(next)}; if (c.cyc >= c.brk) return ${hex(d.pc)}; }`, true);
+    }
     case 'WAI':
       return out(`c.waiting = true; return ${hex(next)};`, true);
     case 'NOP':
@@ -279,17 +316,20 @@ export interface BlockSource {
   source: string;
 }
 
-/** Translate the block starting at pc with widths m8 / x8. */
-export function translate(c: Machine, pc: number, m8: boolean, x8: boolean): BlockSource {
+/** Translate the block starting at pc with widths m8 / x8 (hooked: call c.hook before each instruction). */
+export function translate(c: Machine, pc: number, m8: boolean, x8: boolean, hooked = false): BlockSource {
   const start = pc;
   const lines: string[] = [];
   let k = 0;
   for (;;) {
     const d = decodeAt(c, pc, m8, x8);
     const e = emit(d, m8, x8);
-    lines.push(`/* ${hex(d.pc)} ${d.mn} */ ${e.code}`);
+    const fetch = d.mn === 'MVN' || d.mn === 'MVP' ? '' : `c.tick(${fetchAndIo(d)}); `;
     k++;
     pc = (pc & 0xff0000) | ((pc + d.len) & 0xffff);
+    const boundary = e.end ? '' : ` if (c.cyc >= c.brk) return ${hex(pc)};`;
+    const hook = hooked ? `c.hook(${hex(d.pc)}); ` : '';
+    lines.push(`/* ${hex(d.pc)} ${d.mn} */ ${hook}${fetch}${e.code}${boundary}`);
     m8 = e.m8;
     x8 = e.x8;
     if (e.end) break;
@@ -305,6 +345,8 @@ export function translate(c: Machine, pc: number, m8: boolean, x8: boolean): Blo
 export class Translator {
   private readonly blocks = new Map<number, Block>();
   compiled = 0;
+  /** diagnostics: compile a call of Machine.hook before every instruction */
+  hooked = false;
 
   get(c: Machine, pc: number): Block {
     const key = pc * 4 + (c.m ? 2 : 0) + (c.xf ? 1 : 0);
@@ -313,7 +355,7 @@ export class Translator {
       if ((pc & 0xffff) < 0x8000 && (pc >>> 16 & 0x40) === 0) {
         throw new Error(`code outside ROM at ${hex(pc)} (WRAM / I/O execution is not translated)`);
       }
-      const src = translate(c, pc, c.m, c.xf);
+      const src = translate(c, pc, c.m, c.xf, this.hooked);
       b = new Function('c', src.source) as Block;
       this.blocks.set(key, b);
       this.compiled++;

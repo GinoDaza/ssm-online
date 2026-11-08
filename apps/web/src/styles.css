@@ -8,11 +8,25 @@ body {
   color: #e6e6e6;
 }
 .app {
-  max-width: 960px;
+  max-width: 1024px;
   margin: 0 auto;
   padding: 16px;
 }
 h1 {
   font-size: 20px;
   color: #e8a33c;
+}
+.screen {
+  display: block;
+  width: 100%;
+  max-width: 1024px;
+  aspect-ratio: 8 / 7;
+  margin: 0 auto;
+  image-rendering: pixelated;
+  background: #000;
+}
+.help {
+  font-size: 13px;
+  color: #9aa0a8;
+  text-align: center;
 }

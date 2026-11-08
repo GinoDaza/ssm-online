@@ -1,10 +1,13 @@
 /**
  * The dispatcher: runs translated blocks, or a hand-written override where one is registered
  * at an address. An override replaces the routine entered at that address and must leave the
- * machine as the routine's return would (use `rts` / `rtl`).
+ * machine as the routine's return would (use `rts` / `rtl`). Its bus accesses spend time like
+ * the original's; fetches and internal cycles it should charge with `c.tick` (an override that
+ * spends less time than the original moves later IRQs earlier in the code, deterministically).
  */
 import type { Machine } from './machine.ts';
 import { Translator } from './compile.ts';
+import { NEVER } from './timing.ts';
 
 /** Hand port of the routine at an address; returns the next pc. */
 export type Override = (c: Machine) => number;
@@ -17,7 +20,19 @@ export class Runner {
   /** blocks executed by the last run() */
   lastBlocks = 0;
 
-  /** Run from pc until pc === stop (or WAI); returns the pc reached. */
+  /** Run one block (or override) at pc; returns the next pc. */
+  block(c: Machine, pc: number): number {
+    c.pb = pc >>> 16;
+    c.blockPc = pc;
+    this.steps++;
+    const o = this.overrides.get(pc);
+    return o !== undefined ? o(c) : this.translator.get(c, pc)(c);
+  }
+
+  /**
+   * Run from pc until pc === stop (or WAI); returns the pc reached. No interrupts: for calling
+   * single routines (tests, tools). The game itself runs in Game.step.
+   */
   run(c: Machine, pc: number, stop: number, maxSteps = 5_000_000): number {
     const ov = this.overrides;
     const tr = this.translator;
@@ -25,6 +40,7 @@ export class Runner {
     while (pc !== stop) {
       c.pb = pc >>> 16;
       c.blockPc = pc;
+      c.brk = NEVER;
       const o = ov.get(pc);
       pc = o !== undefined ? o(c) : tr.get(c, pc)(c);
       if (c.waiting) break;
