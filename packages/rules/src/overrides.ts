@@ -90,7 +90,13 @@ export function installRules(game: Game, rules: Ruleset): void {
   const r = game.runner;
   if (rules.singlesArena) {
     for (const site of ARENA_SITES) hideTeam(r, site);
-    r.override(0xc02631, (c) => ((c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0 ? createArenaObjects(c) : r.original(c, 0xc02631)));
+    // the match start: team matches get the singles arena objects, and twice the CPU (four
+    // wrestlers in the singles arena overrun the SNES frame, the game slows down)
+    r.override(0xc02631, (c) => {
+      const team = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0;
+      c.overclock = team ? 1 : 0;
+      return team ? createArenaObjects(c) : r.original(c, 0xc02631);
+    });
     r.override(0xc11f71, teamArenaCamera);
     installItems(r);
     installSprites(r);

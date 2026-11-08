@@ -62,7 +62,11 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   through a return address in a ROM gap (C07F00), so the call chain lives on the game's stack.
 - Arena objects (`rules/src/arena.ts`, at C02631): the match start creates the arena's objects
   from one of two tables; this mode creates the team set plus what only singles have (the
-  ropes' scroll object 38, the side ropes 22 and their pieces 24).
+  ropes' scroll object 38, the side ropes 22 and their pieces 24), without the team arena's
+  rope shake 7C, which poses tiles into the BG maps where the singles maps have the posts.
+- Speed: four wrestlers in the singles arena overrun the SNES frame (the game ran at about 60%
+  outside the ring). Team matches in this mode set `Machine.overclock` = 1 at the match start:
+  CPU and DMA spend half the clocks, the video timing stays.
 - Sprite memory (`rules/src/sprites.ts`): sprite VRAM cannot hold both environments (the four
   team wrestlers stream into D000-FFFF, where singles keep the side-rope tiles and the item
   frames). The singles sprite tiles go to a second sprite bank, a Machine extension the

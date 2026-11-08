@@ -3,9 +3,11 @@
  * arena's objects from a table: C0:A055 in singles, C0:A07C in team play (the team bit picks).
  * Singles have what the singles arena needs: object 38 (C2145A, HDMA channel 6, the per-line
  * BG2 scroll that draws the ring's ropes and floor), the side ropes 22 (C20FC2, shaken by a
- * hit) and their pieces 24 (C21065). Team play has its own: a second follower 3A, 7C, an arrow
- * 4A per wrestler, the marks 66. Both sets are created: the team table, then what only the
- * singles table has, the same way (C20128 then type, argument, +00 + 1).
+ * hit) and their pieces 24 (C21065). Team play has its own: a second follower 3A, an arrow 4A
+ * per wrestler, the marks 66, and 7C (C22592), the team arena's rope shake, which poses tiles
+ * into the BG maps (graphics queue, A800-BFFF): in the singles maps those cells are the corner
+ * posts, so it is left out (the side ropes 22 shake instead). Created: the team table without
+ * 7C, then what only the singles table has, the same way (C20128 then type, argument, +00 + 1).
  */
 import type { Machine } from '@ssm/core';
 
@@ -13,6 +15,8 @@ const SINGLES_TABLE = 0xc0a055;
 const TEAM_TABLE = 0xc0a07c;
 const POOL = 0x1200;
 const POOL_END = 0x1a00;
+/** team arena objects of the environment, not created in the singles arena */
+const TEAM_ARENA_ONLY = new Set([0x7c]);
 
 function table(c: Machine, at: number): [number, number][] {
   const out: [number, number][] = [];
@@ -22,7 +26,7 @@ function table(c: Machine, at: number): [number, number][] {
 
 /** C02631 for team matches in the singles arena; returns from it as its RTS would. */
 export function createArenaObjects(c: Machine): number {
-  const team = table(c, TEAM_TABLE);
+  const team = table(c, TEAM_TABLE).filter(([t]) => !TEAM_ARENA_ONLY.has(t));
   const has = new Set(team.map(([t, a]) => (t << 8) | a));
   const objects = [...team, ...table(c, SINGLES_TABLE).filter(([t, a]) => !has.has((t << 8) | a))];
   const w = c.wram;

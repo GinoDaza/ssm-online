@@ -19,6 +19,8 @@
  * tables go there instead of VRAM. An OAM entry whose `oamx` byte is set takes its tiles from
  * it. Modes set `oamxNext` while the frame builds the OAM; a DMA of the whole OAM commits it
  * to `oamx`, so the flags change with the entries they describe.
+ *
+ * Another: `overclock` (see tick), a faster CPU against the same video timing.
  */
 import { APU_STATE_SIZE, Apu } from '../apu/apu.ts';
 import type { RomImage } from '../rom.ts';
@@ -168,9 +170,16 @@ export class Machine {
 
   // ---- clock -------------------------------------------------------------------------------
 
+  /**
+   * CPU overclock (extension, for game modes; 0 = the SNES): the CPU and its DMA spend
+   * n >> overclock clocks (rounded up), so the game gets 2^overclock times the work per frame.
+   * The line events (HDMA, refresh, interrupts) keep the SNES timing.
+   */
+  overclock = 0;
+
   /** Spend n master clocks, running the line events they pass. */
   tick(n: number): void {
-    this.cyc += n;
+    this.cyc += (n + (1 << this.overclock) - 1) >> this.overclock;
     while (this.cyc >= this.hNext) hEvent(this);
   }
 
@@ -805,7 +814,7 @@ export class Machine {
       this.wmaddr, this.vmaddr, this.cgaddr, this.oamaddr, this.mulA, this.rdmpy, this.rddiv, this.divDividend,
       this.cyc, this.vline, this.hMax, this.event, this.hNext, this.refresh, this.field, this.irqAt,
       this.irqLine ? 1 : 0, this.iChange, this.waiting ? 1 : 0, this.fast, this.nmiFlag, this.hdma,
-      this.hdmaEnded, this.frames];
+      this.hdmaEnded, this.frames, this.overclock];
   }
 
   /** Size of a snapshot in bytes. */
@@ -863,6 +872,7 @@ export class Machine {
     this.hdma = w(30);
     this.hdmaEnded = w(31);
     this.frames = w(32);
+    this.overclock = w(33);
     this.brk = this.irqAt;
     this.frameDone = false;
   }

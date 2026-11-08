@@ -109,11 +109,30 @@ describe.skipIf(!haveRom())('team matches in the singles arena', () => {
     const types = new Set<number>();
     for (let d = 0x1200; d < 0x1a00; d += 0x40) if (g.m.wram[d]) types.add(g.m.wram[d + 1]!);
     for (const t of [0x22, 0x24, 0x38, 0x4a]) expect(types.has(t), `pool type ${t.toString(16)}`).toBe(true);
+    // the team arena's rope shake writes into the BG maps, where the singles maps have the posts
+    expect(types.has(0x7c), 'no team rope shake').toBe(false);
     // the rope tiles (list 72's DC00 part) are in the bank, the team wrestlers keep VRAM D000-FFFF
     expect(g.m.objx.subarray(0x1c00, 0x2000).some((v) => v !== 0)).toBe(true);
     const classic = fight(classicRules);
     expect(classic.m.objx.every((v) => v === 0)).toBe(true);
     expect(classic.m.oamx.every((v) => v === 0)).toBe(true);
+  }, 60_000);
+
+  it('full arena: twice the CPU, so four wrestlers do not slow the game down', () => {
+    const count = (g: Game) => {
+      let frames = 0;
+      g.runner.split(0xc00f82);
+      g.runner.override(0xc00f81, (c) => {
+        frames++;
+        return g.runner.original(c, 0xc00f81);
+      });
+      for (let f = 0; f < 300; f++) g.step([PAD.RIGHT, 0, 0, 0]);
+      return frames;
+    };
+    const arena = fight(teamArenaRules);
+    expect(arena.m.overclock).toBe(1);
+    expect(count(arena)).toBeGreaterThanOrEqual(298);
+    expect(fight(classicRules).m.overclock).toBe(0);
   }, 60_000);
 
   it('full arena: a rollback restores the camera, the items and the floor', () => {
