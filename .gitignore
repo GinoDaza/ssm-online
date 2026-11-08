@@ -1,0 +1,16 @@
+# Copyrighted game data and local artifacts: never commit
+roms/*
+!roms/README.md
+*.sfc
+*.smc
+*.state
+cache/
+fixtures/
+.env
+
+# Tooling
+node_modules/
+dist/
+*.tsbuildinfo
+__pycache__/
+*.pyc

@@ -1,0 +1,14 @@
+{
+  "name": "@ssm/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ssm/core": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.0",
+    "vite": "^7.1.0"
+  }
+}

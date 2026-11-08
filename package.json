@@ -1,0 +1,26 @@
+{
+  "name": "ssm-online",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --import tsx apps/server/src/dev.ts",
+    "start": "npm run build -w @ssm/web && node --env-file-if-exists=.env --import tsx apps/server/src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint:core": "node tools/check-core-purity.mjs",
+    "check": "npm run typecheck && npm run lint:core && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}
