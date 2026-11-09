@@ -43,6 +43,9 @@ export function play(canvas: HTMLCanvasElement, rom: Uint8Array, rules: Ruleset,
   sound.attach();
   speaker.start().catch((e: unknown) => console.warn('no sound:', e));
   game.powerOn();
+  // a multitap in port 2, as on the console: pads 3 and 4 play when a third or fourth player
+  // is there (online slots 3-4, more gamepads); pads nobody holds read 0
+  game.m.multitap = true;
 
   let net: Netplay | null = null;
   if (online) {

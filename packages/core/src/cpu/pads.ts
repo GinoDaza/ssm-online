@@ -19,7 +19,7 @@ const NAMES: Record<string, number> = {
 /** "right+2a" -> [0x0100, 0x0080, 0, 0, 0] (a digit prefix picks the pad, default pad 1). */
 export function padsFromScript(step: string): number[] {
   const pads = [0, 0, 0, 0, 0];
-  if (step === 'wait' || step === '') return pads;
+  if (step === 'wait' || step === '' || step === 'multitap') return pads; // multitap: plugsMultitap
   for (const b of step.split('+')) {
     const k = /^[1-5]/.test(b) ? Number(b[0]) - 1 : 0;
     const name = b.replace(/^[1-5]/, '');
@@ -28,4 +28,9 @@ export function padsFromScript(step: string): number[] {
     pads[k]! |= bit;
   }
   return pads;
+}
+
+/** The script step that plugs a multitap into controller port 2 (then runs as a wait). */
+export function plugsMultitap(step: string): boolean {
+  return step === 'multitap';
 }

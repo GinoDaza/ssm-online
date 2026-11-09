@@ -27,8 +27,10 @@ The server prints its addresses. Friends on the same LAN or VPN (Radmin VPN work
 - [x] Cycle timing: frames match the emulator to the clock, from power-on
 - [x] Picture (PPU renderer) and controls: a local match in the browser (keyboard, gamepads)
 - [x] Sound: SPC700 + DSP running the original driver, sample for sample with the emulator
-- [ ] Online play with rollback netcode
-- [x] 2 vs 2 in the full arena: out of the ring, on the floor, with the ringside items
-- [ ] Wider screen; 4 vs 4
+- [x] Online play with rollback netcode
+- [x] 2 vs 2 in the full arena: out of the ring, on the floor, with the ringside items, count-out
+- [x] Wider screen (16:9) in the full arena
+- [x] Multitap: up to four human players, local or online
+- [ ] 4 vs 4
 
 See `docs/architecture.md` for how it works.

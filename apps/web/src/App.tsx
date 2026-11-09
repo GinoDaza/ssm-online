@@ -162,6 +162,7 @@ function Lobby({ room, rules, setRules, onStart, onBack }: RulesProps & { room: 
         ))}
       </ol>
       <p className="help">Friends join with the same room name · ping {room.ping} ms</p>
+      <p className="help">Up to 4 players: in Team Battle Royal players 3 and 4 join by pressing Start</p>
       {room.isHost ? (
         <div className="row">
           <RulesPicker rules={rules} setRules={setRules} />

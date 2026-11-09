@@ -166,8 +166,8 @@ export class Machine {
   rddiv = 0;
   divDividend = 0xffff;
 
-  /** the pad words (SNES layout, pads 1-4) the controllers hold now (set by the host) */
-  readonly pads = new Uint16Array(4);
+  /** the pad words (SNES layout, pads 1-5) the controllers hold now (set by the host) */
+  readonly pads = new Uint16Array(5);
   /** start of the block running now (diagnostics) */
   blockPc = 0;
   /** the renderer: called for each visible line (0-223) when the beam reaches it */
@@ -559,18 +559,57 @@ export class Machine {
 
   /**
    * Serial joypad reads ($4016 port 1, $4017 port 2, data line D0): the pad's 16 bits (B first)
-   * after a latch, then 1s, which is how the game detects a connected standard pad. No
-   * multitap (D1 reads 0). Bit counters in ioreg[0x1f4 + port]; 16 after the auto-read.
+   * after a latch, then 1s, which is how the game detects a connected standard pad. Bit
+   * counters in ioreg[0x1f4 + port]; 16 after the auto-read.
+   *
+   * A multitap in port 2 (`multitap`, snes9x MP5, pads 2-5): while the latch ($4016 bit 0,
+   * kept in ioreg[0x1f6]) is high port 2 reads D1 = 1 (how the game detects it); then each
+   * read gives one bit of two pads, D0 and D1: pads 2 / 3 while IOBIT ($4201 bit 7) is 1,
+   * pads 4 / 5 while it is 0, each pair with its own counter (ioreg[0x1f5] / ioreg[0x1f7]).
    */
   private serialRead(port: number): number {
+    if (port === 1 && this.multitap) {
+      const bits = 0x1c;
+      if (this.ioreg[0x1f6]! & 1) return bits | 2;
+      const iobit = (this.ioreg[0x201]! & 0x80) !== 0;
+      const at = iobit ? 0x1f5 : 0x1f7;
+      const r = this.ioreg[at]!;
+      if (r < 255) this.ioreg[at] = r + 1;
+      const first = iobit ? 1 : 3;
+      let out = bits;
+      for (let i = 0; i < 2; i++) out |= (r >= 16 ? 1 : (this.pads[first + i]! >> (15 - r)) & 1) << i;
+      return out;
+    }
     const k = this.ioreg[0x1f4 + port]!;
     const bit = k < 16 ? (this.pads[port]! >> (15 - k)) & 1 : 1;
     if (k < 16) this.ioreg[0x1f4 + port] = k + 1;
     return port === 0 ? bit : 0x1c | bit;
   }
 
-  /** The auto-joypad read (line 227): latches the pads into $4218-$421F, clocks the 16 bits out. */
+  /** A multitap in controller port 2 (state: ioreg[0x1f8]). */
+  get multitap(): boolean {
+    return this.ioreg[0x1f8] !== 0;
+  }
+  set multitap(on: boolean) {
+    this.ioreg[0x1f8] = on ? 1 : 0;
+  }
+
+  /**
+   * The auto-joypad read (line 227): latches the pads into $4218-$421F, clocks the 16 bits out.
+   * With the multitap, port 2 gives the pair IOBIT selects ($421A / $421E).
+   */
   autoJoypad(): void {
+    if (this.multitap) {
+      const iobit = (this.ioreg[0x201]! & 0x80) !== 0;
+      const words = [this.pads[0]!, iobit ? this.pads[1]! : this.pads[3]!, 0, iobit ? this.pads[2]! : this.pads[4]!];
+      for (let k = 0; k < 4; k++) {
+        this.ioreg[0x218 + 2 * k] = words[k]! & 0xff;
+        this.ioreg[0x219 + 2 * k] = words[k]! >> 8;
+      }
+      this.ioreg[0x1f4] = 16;
+      this.ioreg[iobit ? 0x1f5 : 0x1f7] = 16;
+      return;
+    }
     for (let k = 0; k < 4; k++) {
       this.ioreg[0x218 + 2 * k] = this.pads[k]! & 0xff;
       this.ioreg[0x219 + 2 * k] = this.pads[k]! >> 8;
@@ -711,7 +750,9 @@ export class Machine {
         if (v & 1) {
           this.ioreg[0x1f4] = 0; // latch: the next reads start at bit 15 (B)
           this.ioreg[0x1f5] = 0;
+          this.ioreg[0x1f7] = 0;
         }
+        this.ioreg[0x1f6] = v & 1;
         break;
       case 0x4200:
         // NMITIMEN: H / V timer IRQ enables (bits 4-5); NMI (bit 7) is never enabled by the game

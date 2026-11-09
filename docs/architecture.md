@@ -19,7 +19,9 @@ tools/           compare-frames.ts / compare-video.ts (game vs emulator), disasm
   widths, so no static analysis is needed.
 - **Machine** (`cpu/machine.ts`) holds the 65816 registers, 128 KiB of WRAM and the ROM. It
   also models the CPU I/O the game uses: multiply / divide, the WRAM port, DMA, and joypads
-  (auto-read and serial). A video sink records VRAM, CGRAM and OAM writes. The sound unit
+  (auto-read and serial), with a multitap in port 2 (`Machine.multitap`, snes9x MP5: pads 2-5,
+  IOBIT picks the pair; checked to the clock on a four-human Team Battle Royal). The web
+  client always plugs it in, so up to four people play. A video sink records VRAM, CGRAM and OAM writes. The sound unit
   (`apu/`) is emulated, and the game uploads and runs its own driver on it. All state that a
   rollback restores lives in one buffer, the sound unit's included: `save()` / `load()`,
   `checksum()`.

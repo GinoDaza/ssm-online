@@ -108,8 +108,6 @@ def main():
     rom = os.path.join(DISASM, 'roms', 'Saturday Night Slam Masters (USA).sfc')
     core_file, core_name = CORES[a.core]
     emu = Emu(rom, core=os.path.join(DISASM, 'tools', 'bin', core_file))
-    if 'multitap' in script:
-        sys.exit('multitap scripts: not supported by the dump yet')
     emu.play_frames(frames[:a.start])
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)

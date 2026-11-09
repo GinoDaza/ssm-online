@@ -185,11 +185,11 @@ export class Game {
     while (m.cyc >= m.hNext) hEvent(m);
   }
 
-  /** One video frame with these pad words (SNES layout, pads 1-4), read on line 227. */
+  /** One video frame with these pad words (SNES layout, pads 1-5; 3-5 need the multitap), read on line 227. */
   step(pads: ArrayLike<number>): void {
     const m = this.m;
     const runner = this.runner;
-    for (let k = 0; k < 4; k++) m.pads[k] = pads[k] ?? 0;
+    for (let k = 0; k < 5; k++) m.pads[k] = pads[k] ?? 0;
     m.frameDone = false;
     for (let n = 0; ; n++) {
       // an instruction boundary, in the oracle's order: timer, IRQ, I-flag change, frame end
