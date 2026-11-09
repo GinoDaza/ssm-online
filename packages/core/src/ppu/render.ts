@@ -12,6 +12,12 @@
  *
  * Pixels are RGB565 and the arithmetic is the oracle's (snes9x: brightness before color math,
  * its add / subtract / half), so a frame can be compared with the emulator's exactly.
+ *
+ * A wider renderer (`width` > 256) puts the SNES picture in the middle. While the machine says
+ * so (Machine.wide, a mode extension) it fills the sides too: BG1 / BG2 go on through their
+ * maps, BG3 (the HUD) stays in the middle 256, sprites take their real x (Machine.oamWideX),
+ * windows are taken at the nearest middle column, and the 32-sprite / 34-tile line limits are
+ * lifted (more of the line is on screen). Otherwise the sides are black.
  */
 import { type Machine, PpuReg } from '../cpu/machine.ts';
 
@@ -88,27 +94,41 @@ const OBJ_SIZES = [
 ] as const;
 
 export class Renderer {
+  /** picture width in pixels (256: the SNES) */
+  readonly width: number;
   /** the frame, RGB565 (the oracle's pixel format), row by row */
-  readonly pixels = new Uint16Array(WIDTH * HEIGHT);
+  readonly pixels: Uint16Array;
   /** CGRAM colors, then the second sprite bank's palettes (Machine.cgramx) at 256-383 */
   private readonly pal = new Uint16Array(384);
   /** this line: winning layer, its color index (CGRAM), its depth */
-  private readonly layer = new Uint8Array(WIDTH);
-  private readonly color = new Uint16Array(WIDTH);
-  private readonly depth = new Uint8Array(WIDTH);
-  /** this line's sprite pixels: CGRAM index (0 = none) and priority */
+  private readonly layer: Uint8Array;
+  private readonly color: Uint16Array;
+  private readonly depth: Uint8Array;
   /** layers not drawn (TM bits: BG1-BG3 1 / 2 / 4, sprites 10), for diagnostics */
   hide = 0;
-  private readonly objColor = new Uint16Array(WIDTH);
-  private readonly objPrio = new Uint8Array(WIDTH);
+  /** this line's sprite pixels: CGRAM index (0 = none) and priority */
+  private readonly objColor: Uint16Array;
+  private readonly objPrio: Uint8Array;
   /** drawing mode of each layer at each x of this line (see windows()) */
-  private readonly modes = new Uint8Array(6 * WIDTH);
-  private readonly spriteList = new Int16Array(64);
+  private readonly modes: Uint8Array;
+  private readonly spriteList = new Int16Array(256);
+  /** this line: the columns drawn [x0, x1) and the SNES x of column 0 (negative: a side) */
+  private x0 = 0;
+  private x1 = WIDTH;
+  private origin = 0;
 
   private readonly m: Machine;
 
-  constructor(m: Machine) {
+  constructor(m: Machine, width = WIDTH) {
     this.m = m;
+    this.width = width;
+    this.pixels = new Uint16Array(width * HEIGHT);
+    this.layer = new Uint8Array(width);
+    this.color = new Uint16Array(width);
+    this.depth = new Uint8Array(width);
+    this.objColor = new Uint16Array(width);
+    this.objPrio = new Uint8Array(width);
+    this.modes = new Uint8Array(6 * width);
   }
 
   /** Draw every frame from now on (one line at a time, as the beam goes). */
@@ -139,12 +159,16 @@ export class Renderer {
   line(y: number): void {
     const m = this.m;
     const io = m.ioreg;
-    const row = y * WIDTH;
+    const W = this.width;
+    const row = y * W;
+    const side = (W - WIDTH) >> 1;
+    const wide = Math.min(m.wide, side);
+    this.origin = -side;
+    this.x0 = side - wide;
+    this.x1 = side + WIDTH + wide;
+    this.pixels.fill(0, row, row + W);
     const inidisp = io[0x00]!;
-    if (inidisp & 0x80) {
-      this.pixels.fill(0, row, row + WIDTH);
-      return;
-    }
+    if (inidisp & 0x80) return;
     const xb = XB[inidisp & 15]!;
     const cg = m.cgram;
     for (let i = 0; i < 256; i++) {
@@ -165,7 +189,7 @@ export class Renderer {
     const bgmode = io[0x05]!;
     if (tm & 0x10) {
       this.sprites(y);
-      for (let x = 0; x < WIDTH; x++) {
+      for (let x = this.x0; x < this.x1; x++) {
         const c = this.objColor[x]!;
         if (c !== 0) this.put(x, OBJ, c, 4 + 4 * this.objPrio[x]!);
       }
@@ -173,7 +197,7 @@ export class Renderer {
     if ((bgmode & 7) === 1) {
       if (tm & 1) this.background(y, 0, 4, 15, 11);
       if (tm & 2) this.background(y, 1, 4, 14, 10);
-      if (tm & 4) this.background(y, 2, 2, bgmode & 8 ? 17 : 7, 3);
+      if (tm & 4) this.background(y, 2, 2, bgmode & 8 ? 17 : 7, 3, true);
     }
     this.compose(row, xb);
   }
@@ -192,42 +216,44 @@ export class Renderer {
     const tmw = io[0x2e]!;
     const cgwsel = io[0x30]!;
     const modes = this.modes;
+    const W = this.width;
     for (let j = 0; j < 6; j++) {
       const s = (j < 4 ? io[0x23 + (j >> 1)]! >> (4 * (j & 1)) : io[0x25]! >> (4 * (j - 4))) & 15;
       const l = (j < 4 ? io[0x2a]! >> (2 * j) : io[0x2b]! >> (2 * (j - 4))) & 3;
       const e1 = (s & 2) !== 0;
       const e2 = (s & 8) !== 0;
-      for (let x = 0; x < WIDTH; x++) {
-        const a = (w1l <= w1r && x >= w1l && x <= w1r) !== ((s & 1) !== 0);
-        const b = (w2l <= w2r && x >= w2l && x <= w2r) !== ((s & 4) !== 0);
+      for (let x = this.x0; x < this.x1; x++) {
+        const gx = Math.min(255, Math.max(0, x + this.origin)); // the nearest SNES column
+        const a = (w1l <= w1r && gx >= w1l && gx <= w1r) !== ((s & 1) !== 0);
+        const b = (w2l <= w2r && gx >= w2l && gx <= w2r) !== ((s & 4) !== 0);
         const w = !e1 ? e2 && b : !e2 ? a : l === 0 ? a || b : l === 1 ? a && b : l === 2 ? a !== b : a === b;
-        modes[j * WIDTH + x] = w ? 1 : 0; // window flags first, modes below
+        modes[j * W + x] = w ? 1 : 0; // window flags first, modes below
       }
     }
     const color = cgwsel >> 6;
     const math = (cgwsel >> 4) & 3;
-    for (let x = 0; x < WIDTH; x++) {
-      const cw = modes[BACKDROP * WIDTH + x]!;
+    for (let x = this.x0; x < this.x1; x++) {
+      const cw = modes[BACKDROP * W + x]!;
       const clip = color === 0 ? 0 : color === 1 ? cw ^ 1 : color === 2 ? cw : 1;
       const prevent = math === 0 ? 0 : math === 1 ? cw ^ 1 : math === 2 ? cw : 1;
       const base = (clip ? 0 : 1) | (prevent ? 0 : 2);
       for (let j = 0; j < BACKDROP; j++) {
-        const i = j * WIDTH + x;
+        const i = j * W + x;
         modes[i] = tmw & (1 << j) && modes[i] ? 0 : base;
       }
-      modes[BACKDROP * WIDTH + x] = base;
+      modes[BACKDROP * W + x] = base;
     }
   }
 
   private put(x: number, layer: number, color: number, depth: number): void {
-    if (depth > this.depth[x]! && this.modes[layer * WIDTH + x] !== 0) {
+    if (depth > this.depth[x]! && this.modes[layer * this.width + x] !== 0) {
       this.layer[x] = layer;
       this.color[x] = color;
       this.depth[x] = depth;
     }
   }
 
-  private background(y: number, n: number, bpp: number, hiDepth: number, loDepth: number): void {
+  private background(y: number, n: number, bpp: number, hiDepth: number, loDepth: number, middle = false): void {
     const m = this.m;
     const io = m.ioreg;
     const vram = m.vram;
@@ -244,8 +270,10 @@ export class Renderer {
     const Y = (y + vofs + 1) & 0x3ff;
     const ty = (Y >> shift) & 63;
     const tileBytes = 8 * bpp;
-    for (let x = 0; x < WIDTH; x++) {
-      const X = (x + hofs) & 0x3ff;
+    const from = middle ? -this.origin : this.x0;
+    const to = middle ? -this.origin + WIDTH : this.x1;
+    for (let x = from; x < to; x++) {
+      const X = (x + this.origin + hofs) & 0x3ff;
       const tx = (X >> shift) & 63;
       let screen = 0;
       if (wide && tx >= 32) screen += 0x400;
@@ -278,9 +306,12 @@ export class Renderer {
     const nameSelect = ((obsel >> 3) & 3) << 13;
     this.objColor.fill(0);
     const list = this.spriteList;
+    const wide = this.x0 < -this.origin || this.x1 > -this.origin + WIDTH;
+    const maxCount = wide ? 128 : 32;
     let count = 0;
-    let tiles = 34;
+    let tiles = wide ? 1 << 20 : 34;
     const hposOf = (s: number) => {
+      if (wide && m.oamx[s]! & 2) return m.oamWideX[s]!;
       const x = oam[4 * s]! | (((oam[512 + (s >> 2)]! >> (2 * (s & 3))) & 1) << 8);
       return x >= 256 ? x - 512 : x;
     };
@@ -289,16 +320,18 @@ export class Renderer {
       if (h === -256) h = 0;
       return h < 0 ? (w + h + 7) >> 3 : h + w > 255 ? (256 - h + 7) >> 3 : w >> 3;
     };
+    const left = this.x0 + this.origin;
+    const right = this.x1 + this.origin;
     for (let s = 0; s < 128; s++) {
       const large = (oam[512 + (s >> 2)]! >> (2 * (s & 3) + 1)) & 1;
       const w = size[2 * large]!;
       const h = size[2 * large + 1]!;
       let hp = hposOf(s);
-      if (hp === -256) hp = 0;
-      if (!(hp > -w && hp <= 256)) continue;
+      if (hp === -256 && !wide) hp = 0;
+      if (!(hp > left - w && hp <= (wide ? right : 256))) continue;
       const line = (y - oam[4 * s + 1]!) & 0xff;
-      if (line >= h || count >= 32) continue;
-      tiles -= visibleTiles(s, w);
+      if (line >= h || count >= maxCount) continue;
+      if (!wide) tiles -= visibleTiles(s, w);
       list[2 * count] = s;
       list[2 * count + 1] = oam[4 * s + 3]! & 0x80 ? line ^ (w - 1) : line;
       count++;
@@ -308,10 +341,10 @@ export class Renderer {
       const line = list[2 * k + 1]!;
       const large = (oam[512 + (s >> 2)]! >> (2 * (s & 3) + 1)) & 1;
       const w = size[2 * large]!;
-      tiles += visibleTiles(s, w);
+      if (!wide) tiles += visibleTiles(s, w);
       if (tiles <= 0) continue;
       const attr = oam[4 * s + 3]!;
-      const bank = m.oamx[s] !== 0 ? m.objx : null; // the second sprite bank (Machine extension)
+      const bank = m.oamx[s]! & 1 ? m.objx : null; // the second sprite bank (Machine extension)
       const name = oam[4 * s + 2]! | ((attr & 1) << 8);
       const hflip = (attr & 0x40) !== 0;
       const rowTile = (((line << 1) + (name & 0xf0)) & 0xf0) | (name & 0x100);
@@ -321,10 +354,11 @@ export class Renderer {
       const pal = (bank ? 256 : 128) + ((attr >> 1) & 7) * 16;
       const prio = (attr >> 4) & 3;
       const hpos = hposOf(s);
-      let X = hpos === -256 ? 256 : hpos;
+      let X = hpos === -256 && !wide ? 256 : hpos;
       let t = tiles;
-      for (; X <= 256 && X < hpos + w; tileX = (tileX + inc) & 0x0f, X += 8) {
-        if (X < -7 || --t < 0 || X === 256) continue;
+      const end = wide ? right : 256;
+      for (; X <= end && X < hpos + w; tileX = (tileX + inc) & 0x0f, X += 8) {
+        if (X < left - 7 || --t < 0 || X === end) continue;
         const tile = rowTile | tileX;
         let p0: number, p1: number, p2: number, p3: number;
         if (bank) {
@@ -341,8 +375,10 @@ export class Renderer {
           p3 = vram[(a + 17) & 0xffff]!;
         }
         for (let px = 0; px < 8; px++) {
-          const sx = X + px;
-          if (sx < 0 || sx >= WIDTH || this.objColor[sx] !== 0) continue;
+          const gx = X + px;
+          if (gx < left || gx >= right) continue;
+          const sx = gx - this.origin;
+          if (this.objColor[sx] !== 0) continue;
           const bit = hflip ? px : 7 - px;
           const c = ((p0 >> bit) & 1) | (((p1 >> bit) & 1) << 1) | (((p2 >> bit) & 1) << 2) | (((p3 >> bit) & 1) << 3);
           if (c === 0) continue;
@@ -370,9 +406,9 @@ export class Renderer {
     const capped = p[PpuReg.MAX_BRIGHTNESS]! !== 15;
     if (capped && op === Op.ADD) op = Op.ADD_CAPPED;
     const cap = xb[31]!;
-    for (let x = 0; x < WIDTH; x++) {
+    for (let x = this.x0; x < this.x1; x++) {
       const layer = this.layer[x]!;
-      const md = this.modes[layer * WIDTH + x]!;
+      const md = this.modes[layer * this.width + x]!;
       const clip = (md & 1) === 0;
       const main = clip ? 0 : this.pal[this.color[x]!]!;
       let out = main;

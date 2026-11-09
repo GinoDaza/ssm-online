@@ -84,6 +84,13 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   `$1A60` goes up and shows (the singles digits banner); everyone back in resets it; at 20 the
   team with someone outside loses (COUNT OUT), both teams outside both lose (DOUBLE COUNT OUT),
   ending the round through the team referee's own path (members left = 0).
+- Wide picture (`rules/src/wide.ts`, `Ruleset.screenWidth` = 400, 16:9; 4x is 1600 x 896): the
+  arena (576 px) is already whole in the BG1 / BG2 maps, so the renderer only draws more of
+  them; `Machine.wide` (the margin, 72) is set at the match start and cleared with the arena,
+  so menus and singles stay 256 px between black sides. BG3 (the HUD) stays in the middle;
+  sprite pieces beyond the 256 carry their real x (`Machine.oamWideX`). The game is told its
+  screen is wider where it decides by it: the culls (x + a < b, seven sites), the screen pull
+  C18E49, the off-screen arrows, and the camera clamps and margins.
 - Not in team play, so not in this mode: the referee himself (singles uses object 0C00, a
   wrestler in team play).
 

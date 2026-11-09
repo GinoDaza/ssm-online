@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { HEIGHT, WIDTH } from '@ssm/core';
+import { HEIGHT } from '@ssm/core';
 import { PLAYABLE_RULES, rulesById, type Ruleset } from '@ssm/rules';
 import { Fit, useGameScale } from './Fit.tsx';
 import { KEY_HELP } from './input.ts';
@@ -185,7 +185,7 @@ function Lobby({ room, rules, setRules, onStart, onBack }: RulesProps & { room: 
 /** The game alone on a black screen, at an integer scale. Esc leaves. */
 function GameView({ rom, online, rules, onBack }: { rom: Uint8Array; online: Online | null; rules: Ruleset; onBack: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const scale = useGameScale();
+  const scale = useGameScale(rules.screenWidth);
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
@@ -206,7 +206,7 @@ function GameView({ rom, online, rules, onBack }: { rom: Uint8Array; online: Onl
 
   return (
     <div className="game">
-      <canvas ref={canvas} width={WIDTH} height={HEIGHT} style={{ width: WIDTH * scale, height: HEIGHT * scale }} />
+      <canvas ref={canvas} width={rules.screenWidth} height={HEIGHT} style={{ width: rules.screenWidth * scale, height: HEIGHT * scale }} />
       {notice && <p className="notice">{notice} Esc to leave.</p>}
     </div>
   );

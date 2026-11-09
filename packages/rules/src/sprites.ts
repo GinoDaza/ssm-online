@@ -149,7 +149,10 @@ export function installSprites(r: Runner): void {
 
   r.split(0xc0036b);
   r.override(0xc00369, (c) => {
-    if (!arenaPresent(c)) c.oamxNext.fill(0);
+    if (!arenaPresent(c)) {
+      c.oamxNext.fill(0);
+      c.wide = 0; // the wide picture is the arena's (wide.ts)
+    }
     return r.original(c, 0xc00369);
   });
 

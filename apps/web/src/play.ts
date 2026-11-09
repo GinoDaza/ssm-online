@@ -3,7 +3,7 @@
  * Audio. Local play steps the game with the local pads; online play ticks a Netplay session,
  * which may re-simulate frames (the renderer and the sound are detached meanwhile).
  */
-import { Game, HEIGHT, Netplay, Renderer, RomImage, Sound, WIDTH } from '@ssm/core';
+import { Game, HEIGHT, Netplay, Renderer, RomImage, Sound } from '@ssm/core';
 import { installRules, type Ruleset } from '@ssm/rules';
 import { Speaker } from './audio.ts';
 import { Controls } from './input.ts';
@@ -34,10 +34,10 @@ export function play(canvas: HTMLCanvasElement, rom: Uint8Array, rules: Ruleset,
   controls.attach();
   const speaker = new Speaker();
   const ctx = canvas.getContext('2d')!;
-  const image = ctx.createImageData(WIDTH, HEIGHT);
+  const image = ctx.createImageData(rules.screenWidth, HEIGHT);
   const game = new Game(new RomImage(rom));
   installRules(game, rules);
-  const renderer = new Renderer(game.m);
+  const renderer = new Renderer(game.m, rules.screenWidth);
   renderer.attach();
   const sound = new Sound(game.m);
   sound.attach();

@@ -32,8 +32,8 @@ export function Fit({ children }: { children: ReactNode }) {
   );
 }
 
-/** Integer scale of the game picture for the window (at least 1). */
-export function useGameScale(): number {
+/** Integer scale of a game picture `width` pixels wide for the window (at least 1). */
+export function useGameScale(width = WIDTH): number {
   const [w, h] = useWindowSize();
-  return Math.max(1, Math.floor(Math.min(w / WIDTH, h / HEIGHT)));
+  return Math.max(1, Math.floor(Math.min(w / width, h / HEIGHT)));
 }

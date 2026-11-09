@@ -17,6 +17,10 @@
  * - y with everyone on the ring: the team rule (C12012: deepest depth less its lift, a dead
  *   band of 4) with the singles margin D8 (C1BA0B) and range 0..C0.
  *
+ * With a wide picture (Machine.wide = M, wide.ts) the screen reaches M further on each side:
+ * the x margins and the off-screen values move out by M and the clamps in by M, so the wide
+ * picture stays inside the arena (x 20 - M .. 160 + M + 256 + M).
+ *
  * Then the original tail (C1202F: D = 0, smoothing C1BB53).
  */
 import type { Machine } from '@ssm/core';
@@ -54,17 +58,18 @@ export function teamArenaCamera(c: Machine): number {
   const onFloor = active.some((d) => rd(d + 0x6f) !== 0);
 
   // x
+  const m = c.wide;
   let cam = rd(0x1a8a);
   let left = s16(rd(0x2c) - cam);
-  if (left < 0) left = 0x10;
-  left = (left - 0x30) & 0xffff;
+  if (left < -m) left = 0x10 - m;
+  left = (left - (0x30 - m)) & 0xffff;
   let right = s16(rd(0x30) - cam);
-  if (right >= 0xf0) right = 0xf0;
-  right = (right - 0xd0) & 0xffff;
+  if (right >= 0xf0 + m) right = 0xf0 + m;
+  right = (right - (0xd0 + m)) & 0xffff;
   const dx = pull(left, right);
   let x = s16(cam + dx);
-  if (x < 0x20) x = 0x20;
-  else if (x > 0x160) x = 0x160;
+  if (x < 0x20 + m) x = 0x20 + m;
+  else if (x > 0x160 - m) x = 0x160 - m;
   const limit = rd(0x1a91);
   const dir = rd(0x1a93);
   if (dir !== 0 && ((dir & 0x8000) === 0 ? limit >= x : limit < x)) x = limit;

@@ -22,6 +22,10 @@
  * to `oamx`, so the flags change with the entries they describe.
  *
  * Another: `overclock` (see tick), a faster CPU against the same video timing.
+ *
+ * And a wider picture: `wide` is how many pixels a mode shows beyond each side of the 256
+ * (0 = the SNES). Sprites out there do not fit the OAM's 9-bit x, so a mode also gives an
+ * entry its real x (`oamWideX`, signed, flagged by `oamx` bit 1), committed with the flags.
  */
 import { APU_STATE_SIZE, Apu } from '../apu/apu.ts';
 import type { RomImage } from '../rom.ts';
@@ -39,7 +43,9 @@ const OBJX = REGS + 4 * REG_WORDS;
 const OAMX = OBJX + 0x4000;
 const OAMX_NEXT = OAMX + 0x80;
 const CGRAMX = OAMX_NEXT + 0x80;
-const APU = CGRAMX + 0x100;
+const OAM_WIDE_X = CGRAMX + 0x100;
+const OAM_WIDE_X_NEXT = OAM_WIDE_X + 0x100;
+const APU = OAM_WIDE_X_NEXT + 0x100;
 const STATE_SIZE = APU + APU_STATE_SIZE;
 
 /** PPU registers that are more than their last written byte (Machine.ppu, 16-bit words). */
@@ -82,6 +88,11 @@ export class Machine {
   readonly oamxNext = this.state.subarray(OAMX_NEXT, OAMX_NEXT + 0x80);
   /** the second bank's own sprite palettes (extension): 8 x 16 colors, as CGRAM 80-FF */
   readonly cgramx = this.state.subarray(CGRAMX, CGRAMX + 0x100);
+  /** per OAM entry, its real x (extension, `oamx` bit 1): int16 little-endian; and the next */
+  readonly oamWideX = new Int16Array(this.state.buffer, this.state.byteOffset + OAM_WIDE_X, 0x80);
+  readonly oamWideXNext = new Int16Array(this.state.buffer, this.state.byteOffset + OAM_WIDE_X_NEXT, 0x80);
+  /** pixels shown beyond each side of the 256 (extension; 0 = the SNES picture) */
+  wide = 0;
   /** the sound unit (SPC700 + DSP), its state in the same buffer */
   readonly apu = new Apu(this.state.subarray(APU, STATE_SIZE));
   readonly rom: RomImage;
@@ -807,7 +818,10 @@ export class Machine {
       this.ioreg[r + 3] = src >> 8;
       this.ioreg[r + 5] = 0;
       this.ioreg[r + 6] = 0;
-      if (wholeOam) this.oamx.set(this.oamxNext);
+      if (wholeOam) {
+        this.oamx.set(this.oamxNext);
+        this.oamWideX.set(this.oamWideXNext);
+      }
     }
   }
 
@@ -818,7 +832,7 @@ export class Machine {
       this.wmaddr, this.vmaddr, this.cgaddr, this.oamaddr, this.mulA, this.rdmpy, this.rddiv, this.divDividend,
       this.cyc, this.vline, this.hMax, this.event, this.hNext, this.refresh, this.field, this.irqAt,
       this.irqLine ? 1 : 0, this.iChange, this.waiting ? 1 : 0, this.fast, this.nmiFlag, this.hdma,
-      this.hdmaEnded, this.frames, this.overclock];
+      this.hdmaEnded, this.frames, this.overclock, this.wide];
   }
 
   /** Size of a snapshot in bytes. */
@@ -877,6 +891,7 @@ export class Machine {
     this.hdmaEnded = w(31);
     this.frames = w(32);
     this.overclock = w(33);
+    this.wide = w(34);
     this.brk = this.irqAt;
     this.frameDone = false;
   }

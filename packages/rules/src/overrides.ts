@@ -14,6 +14,7 @@ import { installCountOut } from './countout.ts';
 import { teamArenaCamera } from './camera.ts';
 import { installItems } from './items.ts';
 import { installSprites } from './sprites.ts';
+import { installWide, marginOf } from './wide.ts';
 import type { Ruleset } from './ruleset.ts';
 
 const TEAM_FLAG = 0x1ba0;
@@ -107,11 +108,13 @@ export function installRules(game: Game, rules: Ruleset): void {
     r.override(0xc02631, (c) => {
       const team = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0;
       c.overclock = team ? 1 : 0;
+      c.wide = team ? marginOf(rules.screenWidth) : 0;
       return team ? createArenaObjects(c) : r.original(c, 0xc02631);
     });
     r.override(0xc11f71, teamArenaCamera);
     installItems(r);
     installSprites(r);
     installCountOut(r);
+    installWide(r);
   }
 }
