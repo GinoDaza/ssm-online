@@ -8,6 +8,11 @@ ROM's 65816 code to JavaScript as it runs. There is no emulator. The fighting is
 original's, frame for frame. New modes replace single routines with TypeScript. No game data
 is included in this repository.
 
+![2 vs 2 in the full arena: wide, full-height picture, one wrestler outside the ring with a ringside item](docs/team-arena.png)
+
+The new modes are not perfect yet: the camera and some sprites still have small visual glitches,
+which will be fixed.
+
 ## Run
 
 Requirements: Node 22.12+ and your own dump of the USA ROM (see `roms/README.md`).
@@ -29,7 +34,7 @@ The server prints its addresses. Friends on the same LAN or VPN (Radmin VPN work
 - [x] Sound: SPC700 + DSP running the original driver, sample for sample with the emulator
 - [x] Online play with rollback netcode
 - [x] 2 vs 2 in the full arena: out of the ring, on the floor, with the ringside items, count-out
-- [x] Wider screen (16:9) in the full arena
+- [x] Wider screen (16:9) and full-height picture in the full arena
 - [x] Multitap: up to four human players, local or online
 - [ ] 4 vs 4
 
