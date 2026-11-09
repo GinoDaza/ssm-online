@@ -75,7 +75,8 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   (`cgramx`: the game's, but palette 7 keeps the items' colors, which team play gives to the
   fourth wrestler). The objects that draw singles graphics use it: items, side ropes 22 / 24,
   combat effects 3C (their floor-impact frames would otherwise show team play's letters). The
-  flags last one frame (cleared at C00369 after the OAM upload), so menus never inherit them.
+  flags stay while the arena objects exist (a paused game re-uploads the same OAM) and are
+  cleared at C00369 once the pool no longer has them, so menus never inherit them.
 - Standing with an item (C1A569 / C1A594): team play fixes the standing pose; with an item in
   hand the singles pose selection runs, which picks the pose holding it.
 - Not in team play, so not in this mode: the referee (singles uses object 0C00, a wrestler in

@@ -18,8 +18,10 @@
  *   same in both sets). Every other object draws team tiles or tiles both sets share (measured
  *   over team matches from the ring load to the result: the arrows 4A, the marks 66, the
  *   "BATTLE / FIGHT" text 64 and the match-end texts 10 / 16 / 9E are team tiles).
- * - the flags last one frame: the OAM upload commits them, then C00369 (the same interrupt)
- *   clears them, so a screen that does not draw these objects never inherits them.
+ * - the flags stay while the arena does (its side ropes 22 in the object pool): a paused game
+ *   uploads the same OAM without drawing again. Once the pool no longer has the arena (the
+ *   screens after the match clear it), C00369 (the interrupt, after the OAM upload) clears
+ *   them, so those screens never inherit them.
  * - palettes: the same for the sprite palettes. Singles keep the items' colors in palette 7
  *   (palette list 4, loaded by the ring load C01FB8), team play gives palettes 4-7 to its four
  *   wrestlers (C18B80). The bank's palettes follow the game's (its CGRAM buffer 3100-31DF,
@@ -124,6 +126,11 @@ function splitSpriteMemory(c: Machine): void {
   }
 }
 
+function arenaPresent(c: Machine): boolean {
+  for (let d = 0x1200; d < 0x1a00; d += 0x40) if (c.wram[d] !== 0 && c.wram[d + 1] === 0x22) return true;
+  return false;
+}
+
 export function installSprites(r: Runner): void {
   // C01FE3 follows the arena list load (C01FE0 JSR C00643) in C01FB8
   r.split(0xc01fe6);
@@ -142,7 +149,7 @@ export function installSprites(r: Runner): void {
 
   r.split(0xc0036b);
   r.override(0xc00369, (c) => {
-    c.oamxNext.fill(0);
+    if (!arenaPresent(c)) c.oamxNext.fill(0);
     return r.original(c, 0xc00369);
   });
 
