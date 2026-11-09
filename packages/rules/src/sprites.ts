@@ -13,6 +13,10 @@
  *   DMA lands in the bank; in team play nothing else is queued there (wrestlers use C00A2B);
  * - drawing (C1F6C7 / C1F74C / C1F7BB, the drawers, X = the object): the entries an item or a
  *   singles rope (pool types 22 / 24) draws are flagged to take their tiles from the bank.
+ * - palettes: the same for the sprite palettes. Singles keep the items' colors in palette 7
+ *   (palette list 4, loaded by the ring load C01FB8), team play gives palettes 4-7 to its four
+ *   wrestlers (C18B80). The bank's palettes follow the game's (its CGRAM buffer 3100-31DF,
+ *   each drawing pass), but palette 7 holds the items' colors from that list.
  */
 import type { Machine, Runner } from '@ssm/core';
 
@@ -73,8 +77,35 @@ export function vramList(c: Machine, list: number): Entry[] {
   return out;
 }
 
+/** Palette lists (C00E47): word pointers at C0:9C62; entries count, first color, CB source. */
+const PALETTE_LISTS = 0xc09c62;
+const RING_PALETTES = 4;
+/** palette 7 in the sprite palettes (byte offset) */
+const ITEM_PALETTE = 7 * 0x20;
+/** the game's CGRAM buffer, sprite palettes 0-6 */
+const SPRITE_PALETTES = [0x3100, 0x31e0] as const;
+
+/** The sprite colors (CGRAM 80-FF) a palette list sets, into `into` (256 bytes). */
+export function spritePalettes(c: Machine, list: number, into: Uint8Array): void {
+  const u8 = (a: number) => c.rom.u8(a);
+  for (let p = 0xc00000 | u8(PALETTE_LISTS + 2 * list) | (u8(PALETTE_LISTS + 2 * list + 1) << 8); u8(p) !== 0; p += 4) {
+    const count = u8(p);
+    const first = u8(p + 1);
+    const src = 0xcb0000 | u8(p + 2) | (u8(p + 3) << 8);
+    for (let k = 0; k < count; k++) {
+      const color = first + k;
+      if (color < 0x80 || color > 0xff) continue;
+      into[2 * (color - 0x80)] = u8(src + 2 * k);
+      into[2 * (color - 0x80) + 1] = u8(src + 2 * k + 1);
+    }
+  }
+}
+
 /** After the arena's VRAM list: singles sprite tiles to the bank, team tags back to VRAM. */
 function splitSpriteMemory(c: Machine): void {
+  const ring = new Uint8Array(0x100);
+  spritePalettes(c, RING_PALETTES, ring);
+  c.cgramx.set(ring.subarray(ITEM_PALETTE, ITEM_PALETTE + 0x20), ITEM_PALETTE);
   c.objx.set(c.vram.subarray(SPRITES, SPRITES + 0x2000), 0);
   for (const { dest, data } of vramList(c, TEAM_ARENA_LIST)) {
     for (let i = 0; i < data.length; i++) {
@@ -105,6 +136,7 @@ export function installSprites(r: Runner): void {
   r.split(0xc1f5a4);
   r.override(0xc1f5a2, (c) => {
     c.oamxNext.fill(0);
+    if (isTeam(c)) c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[1]), 0);
     return r.original(c, 0xc1f5a2);
   });
   for (const drawer of [0xc1f6c7, 0xc1f74c, 0xc1f7bb]) {

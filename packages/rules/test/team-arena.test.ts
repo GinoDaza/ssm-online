@@ -113,6 +113,10 @@ describe.skipIf(!haveRom())('team matches in the singles arena', () => {
     expect(types.has(0x7c), 'no team rope shake').toBe(false);
     // the rope tiles (list 72's DC00 part) are in the bank, the team wrestlers keep VRAM D000-FFFF
     expect(g.m.objx.subarray(0x1c00, 0x2000).some((v) => v !== 0)).toBe(true);
+    // and their palettes: the items' palette 7 (palette list 4: CB:FBC0), not the 4th wrestler's
+    const items = Array.from({ length: 32 }, (_, i) => g.m.rom.u8(0xcbfbc0 + i));
+    expect(Array.from(g.m.cgramx.subarray(0xe2, 0x100))).toEqual(items.slice(2));
+    expect(Array.from(g.m.cgram.subarray(0x1e2, 0x200))).not.toEqual(items.slice(2));
     const classic = fight(classicRules);
     expect(classic.m.objx.every((v) => v === 0)).toBe(true);
     expect(classic.m.oamx.every((v) => v === 0)).toBe(true);

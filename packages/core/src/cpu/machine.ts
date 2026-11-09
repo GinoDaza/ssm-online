@@ -17,7 +17,8 @@
  * VMAIN writes): a second sprite bank. `objx` holds 512 sprite tiles laid out as the sprite
  * tables are (tile n at n * 32); with VMAIN ($2115) bit 6 set, VRAM writes into the sprite
  * tables go there instead of VRAM. An OAM entry whose `oamx` byte is set takes its tiles from
- * it. Modes set `oamxNext` while the frame builds the OAM; a DMA of the whole OAM commits it
+ * it, and its colors from the bank's own sprite palettes (`cgramx`). Modes set `oamxNext`
+ * while the frame builds the OAM; a DMA of the whole OAM commits it
  * to `oamx`, so the flags change with the entries they describe.
  *
  * Another: `overclock` (see tick), a faster CPU against the same video timing.
@@ -37,7 +38,8 @@ const REG_WORDS = 48;
 const OBJX = REGS + 4 * REG_WORDS;
 const OAMX = OBJX + 0x4000;
 const OAMX_NEXT = OAMX + 0x80;
-const APU = OAMX_NEXT + 0x80;
+const CGRAMX = OAMX_NEXT + 0x80;
+const APU = CGRAMX + 0x100;
 const STATE_SIZE = APU + APU_STATE_SIZE;
 
 /** PPU registers that are more than their last written byte (Machine.ppu, 16-bit words). */
@@ -78,6 +80,8 @@ export class Machine {
   /** per OAM entry: 1 = its tiles come from objx (extension); set by the next full OAM DMA */
   readonly oamx = this.state.subarray(OAMX, OAMX + 0x80);
   readonly oamxNext = this.state.subarray(OAMX_NEXT, OAMX_NEXT + 0x80);
+  /** the second bank's own sprite palettes (extension): 8 x 16 colors, as CGRAM 80-FF */
+  readonly cgramx = this.state.subarray(CGRAMX, CGRAMX + 0x100);
   /** the sound unit (SPC700 + DSP), its state in the same buffer */
   readonly apu = new Apu(this.state.subarray(APU, STATE_SIZE));
   readonly rom: RomImage;

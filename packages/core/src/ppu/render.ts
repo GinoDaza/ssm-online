@@ -90,15 +90,16 @@ const OBJ_SIZES = [
 export class Renderer {
   /** the frame, RGB565 (the oracle's pixel format), row by row */
   readonly pixels = new Uint16Array(WIDTH * HEIGHT);
-  private readonly pal = new Uint16Array(256);
+  /** CGRAM colors, then the second sprite bank's palettes (Machine.cgramx) at 256-383 */
+  private readonly pal = new Uint16Array(384);
   /** this line: winning layer, its color index (CGRAM), its depth */
   private readonly layer = new Uint8Array(WIDTH);
-  private readonly color = new Uint8Array(WIDTH);
+  private readonly color = new Uint16Array(WIDTH);
   private readonly depth = new Uint8Array(WIDTH);
   /** this line's sprite pixels: CGRAM index (0 = none) and priority */
   /** layers not drawn (TM bits: BG1-BG3 1 / 2 / 4, sprites 10), for diagnostics */
   hide = 0;
-  private readonly objColor = new Uint8Array(WIDTH);
+  private readonly objColor = new Uint16Array(WIDTH);
   private readonly objPrio = new Uint8Array(WIDTH);
   /** drawing mode of each layer at each x of this line (see windows()) */
   private readonly modes = new Uint8Array(6 * WIDTH);
@@ -149,6 +150,11 @@ export class Renderer {
     for (let i = 0; i < 256; i++) {
       const c = cg[2 * i]! | (cg[2 * i + 1]! << 8);
       this.pal[i] = rgb565(xb[c & 31]!, xb[(c >> 5) & 31]!, xb[(c >> 10) & 31]!);
+    }
+    const cx = m.cgramx;
+    for (let i = 0; i < 128; i++) {
+      const c = cx[2 * i]! | (cx[2 * i + 1]! << 8);
+      this.pal[256 + i] = rgb565(xb[c & 31]!, xb[(c >> 5) & 31]!, xb[(c >> 10) & 31]!);
     }
     this.windows();
     this.layer.fill(BACKDROP);
@@ -305,16 +311,16 @@ export class Renderer {
       tiles += visibleTiles(s, w);
       if (tiles <= 0) continue;
       const attr = oam[4 * s + 3]!;
+      const bank = m.oamx[s] !== 0 ? m.objx : null; // the second sprite bank (Machine extension)
       const name = oam[4 * s + 2]! | ((attr & 1) << 8);
       const hflip = (attr & 0x40) !== 0;
       const rowTile = (((line << 1) + (name & 0xf0)) & 0xf0) | (name & 0x100);
       let tileX = name & 0x0f;
       const inc = hflip ? -1 : 1;
       if (hflip) tileX = (tileX + (w >> 3) - 1) & 0x0f;
-      const pal = 128 + ((attr >> 1) & 7) * 16;
+      const pal = (bank ? 256 : 128) + ((attr >> 1) & 7) * 16;
       const prio = (attr >> 4) & 3;
       const hpos = hposOf(s);
-      const bank = m.oamx[s] !== 0 ? m.objx : null; // the second sprite bank (Machine extension)
       let X = hpos === -256 ? 256 : hpos;
       let t = tiles;
       for (; X <= 256 && X < hpos + w; tileX = (tileX + inc) & 0x0f, X += 8) {
@@ -370,7 +376,7 @@ export class Renderer {
       const clip = (md & 1) === 0;
       const main = clip ? 0 : this.pal[this.color[x]!]!;
       let out = main;
-      const math = (cgadsub & (1 << layer)) !== 0 && (md & 2) !== 0 && (layer !== OBJ || this.color[x]! >= 192);
+      const math = (cgadsub & (1 << layer)) !== 0 && (md & 2) !== 0 && (layer !== OBJ || (this.color[x]! & 0x7f) >= 64); // sprite palettes 4-7
       if (math) {
         if (viaSub || op === Op.ADD || op === Op.SUB || op === Op.ADD_CAPPED) {
           // whole: plain, or the subscreen-half path with no subscreen pixel

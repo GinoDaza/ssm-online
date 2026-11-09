@@ -71,7 +71,11 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   team wrestlers stream into D000-FFFF, where singles keep the side-rope tiles and the item
   frames). The singles sprite tiles go to a second sprite bank, a Machine extension the
   original never uses: VMAIN bit 6 sends VRAM writes there, and OAM entries flagged in
-  `oamxNext` (committed by the next OAM DMA) draw from it. Items and side ropes use it.
+  `oamxNext` (committed by the next OAM DMA) draw from it, with the bank's own sprite palettes
+  (`cgramx`: the game's, but palette 7 keeps the items' colors, which team play gives to the
+  fourth wrestler). Items and side ropes use it.
+- Standing with an item (C1A569 / C1A594): team play fixes the standing pose; with an item in
+  hand the singles pose selection runs, which picks the pose holding it.
 - Not in team play, so not in this mode: the referee (singles uses object 0C00, a wrestler in
   team play) and his count-out; a match ends by the team judge (pins, time).
 

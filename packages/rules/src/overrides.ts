@@ -41,6 +41,9 @@ const targetOutside = (c: Machine) => {
   return (side & 0x8001) !== 0 && side !== 0x7f7f;
 };
 
+/** The wrestler (D at the site) holds an item (+BE, its slot 1000-1180). */
+const holdsItem = (c: Machine) => (c.wram[c.d + 0xbe]! | c.wram[c.d + 0xbf]!) !== 0;
+
 /** Environment choices: these run as in singles. */
 export const ARENA_SITES: readonly Site[] = [
   // arena graphics, before the match (C01FB8)
@@ -60,6 +63,11 @@ export const ARENA_SITES: readonly Site[] = [
   // a target outside takes the singles path, which aims the dive at his side (+B4 = his +6F)
   { pc: 0xc12df0, len: 3, why: 'corner dive 84 onto a target outside', when: targetOutside },
   { pc: 0xc12ee5, len: 3, why: 'corner dive 86 onto a target outside', when: targetOutside },
+  // the standing pose (C1A569 on entry, C1A594 each step): team play fixes the middle variant
+  // and never re-poses; singles pick the variant toward the target, + 3 when holding an item
+  // (the pose with the item in hand). Team matches have no items, so only then.
+  { pc: 0xc1a56b, len: 3, why: 'standing pose with an item in hand (entry)', when: holdsItem },
+  { pc: 0xc1a596, len: 3, why: 'standing pose with an item in hand (each step)', when: holdsItem },
   // the CPU: its driver rolls how to react when its situation changes toward the outside
   // (team play skips the roll), and the script opcodes that take it out after a target
   { pc: 0xc15f82, len: 3, why: 'AI driver: roll on a change of situation bit 2 (team: no roll)' },
