@@ -10,6 +10,7 @@
  */
 import type { Game, Machine, Runner } from '@ssm/core';
 import { createArenaObjects } from './arena.ts';
+import { installCountOut } from './countout.ts';
 import { teamArenaCamera } from './camera.ts';
 import { installItems } from './items.ts';
 import { installSprites } from './sprites.ts';
@@ -68,6 +69,9 @@ export const ARENA_SITES: readonly Site[] = [
   // (the pose with the item in hand). Team matches have no items, so only then.
   { pc: 0xc1a56b, len: 3, why: 'standing pose with an item in hand (entry)', when: holdsItem },
   { pc: 0xc1a596, len: 3, why: 'standing pose with an item in hand (each step)', when: holdsItem },
+  // the round-end message C069F8: team play shows only TIME OVER; a count-out (countout.ts)
+  // takes the singles choice, COUNT OUT (`$1A62` = 1) or DOUBLE COUNT OUT (`$1A63`)
+  { pc: 0xc06a24, len: 3, why: 'count-out message', when: (c) => c.wram[0x1a62] === 1 || c.wram[0x1a63] !== 0 },
   // the CPU: its driver rolls how to react when its situation changes toward the outside
   // (team play skips the roll), and the script opcodes that take it out after a target
   { pc: 0xc15f82, len: 3, why: 'AI driver: roll on a change of situation bit 2 (team: no roll)' },
@@ -108,5 +112,6 @@ export function installRules(game: Game, rules: Ruleset): void {
     r.override(0xc11f71, teamArenaCamera);
     installItems(r);
     installSprites(r);
+    installCountOut(r);
   }
 }

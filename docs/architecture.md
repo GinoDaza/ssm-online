@@ -79,8 +79,13 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   cleared at C00369 once the pool no longer has them, so menus never inherit them.
 - Standing with an item (C1A569 / C1A594): team play fixes the standing pose; with an item in
   hand the singles pose selection runs, which picks the pose holding it.
-- Not in team play, so not in this mode: the referee (singles uses object 0C00, a wrestler in
-  team play) and his count-out; a match ends by the team judge (pins, time).
+- Count-out (`rules/src/countout.ts`): team play has no referee, so the count runs without one,
+  with the singles rule: each clock second while someone stands outside (+152) the count
+  `$1A60` goes up and shows (the singles digits banner); everyone back in resets it; at 20 the
+  team with someone outside loses (COUNT OUT), both teams outside both lose (DOUBLE COUNT OUT),
+  ending the round through the team referee's own path (members left = 0).
+- Not in team play, so not in this mode: the referee himself (singles uses object 0C00, a
+  wrestler in team play).
 
 `rules/test/team-arena.test.ts` drives player 1 with a bot (`test/bot.ts`: goals checked
 against WRAM) through a Team Battle Royal reached from power-on: classic keeps the ropes shut,

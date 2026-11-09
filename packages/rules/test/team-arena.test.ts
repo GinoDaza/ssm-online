@@ -77,11 +77,13 @@ describe.skipIf(!haveRom())('team matches in the singles arena', () => {
       { kind: 'enter', dir: PAD.UP },
     ]);
     let lowest = 0;
+    let count = 0;
     for (let f = 0; f < 2000 && !bot.done; f++) {
       g.step([bot.pad(), 0, 0, 0]);
       lowest = Math.max(lowest, w16(g, 0x1a8d));
+      count = Math.max(count, g.m.wram[0x1a60]!);
     }
-    return { results: bot.results, cameraY: lowest };
+    return { results: bot.results, cameraY: lowest, count, countNow: g.m.wram[0x1a60]! };
   };
 
   it('classic: the ropes hold and the camera stays on the ring', () => {
@@ -95,6 +97,28 @@ describe.skipIf(!haveRom())('team matches in the singles arena', () => {
     expect(r.results[1], 'out').toBeGreaterThan(0);
     expect(r.results[3], 'back in').toBeGreaterThan(0);
     expect(r.cameraY).toBeGreaterThan(0x90);
+    // the count ran while he was outside (300 frames: about 5) and went back to 0
+    expect(r.count).toBeGreaterThanOrEqual(3);
+    expect(r.count).toBeLessThan(20);
+    expect(r.countNow).toBe(0);
+  }, 60_000);
+
+  it('full arena: 20 seconds outside is a count out, his team loses', () => {
+    const g = fight(teamArenaRules);
+    const bot = new Bot(g, [
+      { kind: 'goto', x: 320, depth: 360 },
+      { kind: 'exit', dir: PAD.DOWN },
+      { kind: 'wait', frames: 3000 },
+    ]);
+    let countOut = false;
+    let state = 0;
+    for (let f = 0; f < 3000 && state !== 0x22 && state !== 0x20; f++) {
+      g.step([bot.pad(), 0, 0, 0]);
+      countOut ||= g.m.wram[0x1a62] === 1;
+      state = g.m.wram[0x56]!;
+    }
+    expect(countOut, 'COUNT OUT').toBe(true);
+    expect(state.toString(16), 'his team lost (22), did not win (20)').toBe('22');
   }, 60_000);
 
   it('full arena: the ringside items are set up and run', () => {
