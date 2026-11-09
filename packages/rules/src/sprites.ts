@@ -11,12 +11,15 @@
  *   then list 73's part of C000-CFFF goes back to VRAM for the team tags;
  * - graphics queue (C00AC0, one record built): a record for D000-DFFF gets VMAIN bit 6, so its
  *   DMA lands in the bank; in team play nothing else is queued there (wrestlers use C00A2B);
- * - drawing (C1F6C7 / C1F74C / C1F7BB, the drawers, X = the object): during the match the
- *   entries of the items and of the pool objects are flagged to take their tiles from the
- *   bank, except the two that draw team tiles (measured over team matches: the off-screen
- *   arrows 4A and the marks 66). The others draw singles graphics: the side ropes, and the
- *   combat effects 3C, whose floor-impact frames use tiles that team play's set replaces with
- *   its letters (their other tiles are the same in both sets).
+ * - drawing (C1F6C7 / C1F74C / C1F7BB, the drawers, X = the object): the entries of the
+ *   objects that draw singles graphics are flagged to take their tiles from the
+ *   bank: the items, the side ropes 22 / 24, and the combat effects 3C (their floor-impact
+ *   frames use tiles that team play's set replaces with its letters; their other tiles are the
+ *   same in both sets). Every other object draws team tiles or tiles both sets share (measured
+ *   over team matches from the ring load to the result: the arrows 4A, the marks 66, the
+ *   "BATTLE / FIGHT" text 64 and the match-end texts 10 / 16 / 9E are team tiles).
+ * - the flags last one frame: the OAM upload commits them, then C00369 (the same interrupt)
+ *   clears them, so a screen that does not draw these objects never inherits them.
  * - palettes: the same for the sprite palettes. Singles keep the items' colors in palette 7
  *   (palette list 4, loaded by the ring load C01FB8), team play gives palettes 4-7 to its four
  *   wrestlers (C18B80). The bank's palettes follow the game's (its CGRAM buffer 3100-31DF,
@@ -34,10 +37,9 @@ const TEAM_ARENA_LIST = 73;
 const SPRITES = 0xc000;
 const TEAM_TAGS = [0xc000, 0xd000] as const;
 const SINGLES_STREAM = [0xd000, 0xe000] as const;
-/** pool types that draw from the team's sprite tiles */
-const TEAM_TILES = new Set([0x4a, 0x66]);
-/** game state `$56`: the match runs below 1C (then the result screens) */
-const MATCH_END = 0x1c;
+/** pool types that draw singles graphics */
+const SINGLES_GRAPHICS = new Set([0x22, 0x24, 0x3c]);
+
 
 interface Entry {
   /** VRAM byte address */
@@ -138,6 +140,12 @@ export function installSprites(r: Runner): void {
     return r.original(c, 0xc00ac0);
   });
 
+  r.split(0xc0036b);
+  r.override(0xc00369, (c) => {
+    c.oamxNext.fill(0);
+    return r.original(c, 0xc00369);
+  });
+
   // the drawing pass C1F5A2 starts with no flags; then each drawer's entries, from $F4 on, are
   // its object's until the next object starts (singles: never flagged)
   r.split(0xc1f5a4);
@@ -151,9 +159,7 @@ export function installSprites(r: Runner): void {
     r.override(drawer, (c) => {
       const d = c.x;
       const bank =
-        isTeam(c) &&
-        c.wram[0x56]! < MATCH_END &&
-        ((d >= 0x1000 && d < 0x1200) || (d >= 0x1200 && d < 0x1a00 && !TEAM_TILES.has(c.wram[d + 1]!)));
+        isTeam(c) && ((d >= 0x1000 && d < 0x1200) || (d >= 0x1200 && d < 0x1a00 && SINGLES_GRAPHICS.has(c.wram[d + 1]!)));
       c.oamxNext.fill(bank ? 1 : 0, c.wram[0xf4]! & 0x7f);
       return r.original(c, drawer);
     });
