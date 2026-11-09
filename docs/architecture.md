@@ -73,7 +73,9 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   original never uses: VMAIN bit 6 sends VRAM writes there, and OAM entries flagged in
   `oamxNext` (committed by the next OAM DMA) draw from it, with the bank's own sprite palettes
   (`cgramx`: the game's, but palette 7 keeps the items' colors, which team play gives to the
-  fourth wrestler). Items and side ropes use it.
+  fourth wrestler). During the match the items and the pool objects use it, except the two
+  that draw team tiles (off-screen arrows 4A, marks 66); e.g. the combat effects' floor-impact
+  frames would otherwise show team play's letters.
 - Standing with an item (C1A569 / C1A594): team play fixes the standing pose; with an item in
   hand the singles pose selection runs, which picks the pose holding it.
 - Not in team play, so not in this mode: the referee (singles uses object 0C00, a wrestler in

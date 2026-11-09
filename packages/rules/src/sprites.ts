@@ -11,8 +11,12 @@
  *   then list 73's part of C000-CFFF goes back to VRAM for the team tags;
  * - graphics queue (C00AC0, one record built): a record for D000-DFFF gets VMAIN bit 6, so its
  *   DMA lands in the bank; in team play nothing else is queued there (wrestlers use C00A2B);
- * - drawing (C1F6C7 / C1F74C / C1F7BB, the drawers, X = the object): the entries an item or a
- *   singles rope (pool types 22 / 24) draws are flagged to take their tiles from the bank.
+ * - drawing (C1F6C7 / C1F74C / C1F7BB, the drawers, X = the object): during the match the
+ *   entries of the items and of the pool objects are flagged to take their tiles from the
+ *   bank, except the two that draw team tiles (measured over team matches: the off-screen
+ *   arrows 4A and the marks 66). The others draw singles graphics: the side ropes, and the
+ *   combat effects 3C, whose floor-impact frames use tiles that team play's set replaces with
+ *   its letters (their other tiles are the same in both sets).
  * - palettes: the same for the sprite palettes. Singles keep the items' colors in palette 7
  *   (palette list 4, loaded by the ring load C01FB8), team play gives palettes 4-7 to its four
  *   wrestlers (C18B80). The bank's palettes follow the game's (its CGRAM buffer 3100-31DF,
@@ -30,7 +34,10 @@ const TEAM_ARENA_LIST = 73;
 const SPRITES = 0xc000;
 const TEAM_TAGS = [0xc000, 0xd000] as const;
 const SINGLES_STREAM = [0xd000, 0xe000] as const;
-const SINGLES_ROPES = new Set([0x22, 0x24]);
+/** pool types that draw from the team's sprite tiles */
+const TEAM_TILES = new Set([0x4a, 0x66]);
+/** game state `$56`: the match runs below 1C (then the result screens) */
+const MATCH_END = 0x1c;
 
 interface Entry {
   /** VRAM byte address */
@@ -143,7 +150,10 @@ export function installSprites(r: Runner): void {
     r.split(drawer + 2);
     r.override(drawer, (c) => {
       const d = c.x;
-      const bank = isTeam(c) && ((d >= 0x1000 && d < 0x1200) || (d >= 0x1200 && d < 0x1a00 && SINGLES_ROPES.has(c.wram[d + 1]!)));
+      const bank =
+        isTeam(c) &&
+        c.wram[0x56]! < MATCH_END &&
+        ((d >= 0x1000 && d < 0x1200) || (d >= 0x1200 && d < 0x1a00 && !TEAM_TILES.has(c.wram[d + 1]!)));
       c.oamxNext.fill(bank ? 1 : 0, c.wram[0xf4]! & 0x7f);
       return r.original(c, drawer);
     });
