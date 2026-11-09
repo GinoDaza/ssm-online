@@ -102,6 +102,9 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   has one rule on the ring and the floor (`camera.ts` tallY): the middle of the wrestlers' feet
   lines at line BC, the front one at C8 at most and the back one at 58 at least, gliding 1-4
   lines a frame, instead of the ring rule (front feet near D8) that jumped to the floor margins.
+  The front limit holds at once: the floor walk (C18F05) puts a wrestler back at D0 below the
+  target, so a higher camera would pull him toward the ring; when they do not fit, the back
+  one is left out at the top.
 - Not in team play, so not in this mode: the referee himself (singles uses object 0C00, a
   wrestler in team play).
 

@@ -25,7 +25,9 @@
  * middle of the wrestlers' feet lines (depth - lift - camera y) at FEET_MIDDLE, the front one
  * at FEET_BOTTOM at most and the back one at FEET_TOP at least while they fit (the singles
  * floor margins, the bottom one lower), the target gliding toward it (an eighth of the way a
- * frame, 1..4). The original ring rule keeps the front feet near line D8 (much of the crowd,
+ * frame, 1..4); when they do not fit, the back one is left out at the top. The front limit
+ * holds at once, without gliding: the floor walk (C18F05) keeps a wrestler's depth within D0 of
+ * the target, so a camera above that would pull him back toward the ring. The original ring rule keeps the front feet near line D8 (much of the crowd,
  * no apron) and switches to the floor margins when someone is out, a jump of about 24 lines.
  * The camera y is at least PICTURE_TOP, so the top line shows no more of the arena than the
  * original's top line did.
@@ -73,9 +75,11 @@ function tallY(c: Machine, active: number[], target: number): number {
     if (back - want < FEET_TOP) want = back - FEET_TOP;
   }
   const d = want - s16(target);
-  if (d === 0) return s16(target);
   const step = Math.max(1, Math.min(4, Math.abs(d) >> 3));
-  return s16(target) + (d > 0 ? step : -step);
+  let y = d === 0 ? s16(target) : s16(target) + (d > 0 ? step : -step);
+  // the front one at once: on the floor, C18F05 puts back whoever walks D0 below the target
+  if (front - y > FEET_BOTTOM) y = front - FEET_BOTTOM;
+  return y;
 }
 
 export function teamArenaCamera(c: Machine): number {
