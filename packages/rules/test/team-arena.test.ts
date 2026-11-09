@@ -3,54 +3,15 @@
  * singles stay the original, a team match gets the floor around the ring (out and back in,
  * the camera following), the ringside items run, and rollback still restores everything.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
-import { Game, HEIGHT, PAD, Renderer, Rollback, WIDTH, checksum, padsFromScript } from '@ssm/core';
-import { classicRules, installRules, teamArenaRules, type Ruleset } from '../src/index.ts';
+import { describe, expect, it } from 'vitest';
+import { Game, PAD, padsFromScript } from '@ssm/core';
+import { classicRules, installRules, teamArenaRules } from '../src/index.ts';
 import { hasFixture, haveRom, loadFixture, loadRom } from '../../core/test/fixture.ts';
 import { Bot } from './bot.ts';
+import { teamMatch, w16 } from './team-match.ts';
 
-/** ssm-disasm inputs/T013-team.txt: power-on, Team Battle Royal (pad 1 is Jumbo), the match. */
-const SCRIPT =
-  'wait*650 start*4 wait*60 start*4 wait*220 right*4 wait*30 y*4 wait*150 y*4 wait*60 right*4 y*4 wait*60 right*4 y*4 wait*60 y*4 wait*60 y*4 wait*1800 right*30 y*4 wait*40 b*4 wait*40 left*30 y*4 wait*40 a*4 wait*40 right*30 y*4 wait*40 b*4 wait*40 left*30 y*4 wait*40 a*4 wait*40 right*30 y*4 wait*40 b*4 wait*40';
-/** the team selection is done and nothing the rules touch has run yet */
-const SELECTED = 1400;
-/** the match is on */
-const FIGHT = 3900;
-
-function steps(offset: number): string[] {
-  const out = Array<string>(offset).fill('wait');
-  for (const t of SCRIPT.split(' ')) {
-    const [s, n] = t.split('*');
-    for (let k = 0; k < Number(n); k++) out.push(s!);
-  }
-  return out;
-}
-
-const w16 = (g: Game, a: number) => g.m.wram[a]! | (g.m.wram[a + 1]! << 8);
-
-describe.skipIf(!haveRom())('team matches in the singles arena', () => {
-  /** snapshots at SELECTED, by power-on offset (the offset changes the RNG: 2 brings items) */
-  const selected = new Map<number, Uint8Array>();
-  beforeAll(() => {
-    for (const offset of [0, 2]) {
-      const g = new Game(loadRom());
-      g.powerOn();
-      const st = steps(offset);
-      for (let f = 0; f < SELECTED; f++) g.step(padsFromScript(st[f] ?? 'wait').slice(0, 4));
-      selected.set(offset, g.m.save());
-    }
-  }, 60_000);
-
-  /** A game with `rules` at the start of the fight. */
-  function fight(rules: Ruleset, offset = 0): Game {
-    const g = new Game(loadRom());
-    installRules(g, rules);
-    g.m.load(selected.get(offset)!);
-    const st = steps(offset);
-    for (let f = SELECTED; f < FIGHT; f++) g.step(padsFromScript(st[f] ?? 'wait').slice(0, 4));
-    expect(g.m.wram[0x1ba0]! & 0x40, 'a team match').toBe(0x40);
-    return g;
-  }
+describe.skipIf(!haveRom())('team matches in the singles arena: play', () => {
+  const fight = teamMatch([0]);
 
   it.skipIf(!hasFixture('match1-2830-trace'))('a singles match is still the original, to the clock', () => {
     const fx = loadFixture('match1-2830-trace');
@@ -119,113 +80,5 @@ describe.skipIf(!haveRom())('team matches in the singles arena', () => {
     }
     expect(countOut, 'COUNT OUT').toBe(true);
     expect(state.toString(16), 'his team lost (22), did not win (20)').toBe('22');
-  }, 60_000);
-
-  it('full arena: the ringside items are set up and run', () => {
-    const items = (g: Game) => [0x1000, 0x1080].map((d) => g.m.wram[d]!);
-    // C18BBF set them up in this match; C2032D initialises them (+00 bit 7) on its first frame
-    expect(items(fight(teamArenaRules, 2)).map((v) => v & 0x80)).toEqual([0x80, 0x80]);
-    expect(items(fight(classicRules, 2))).toEqual([0, 0]);
-  }, 60_000);
-
-  it('full arena: the side ropes are created and drawn from the second sprite bank', () => {
-    const g = fight(teamArenaRules);
-    const types = new Set<number>();
-    for (let d = 0x1200; d < 0x1a00; d += 0x40) if (g.m.wram[d]) types.add(g.m.wram[d + 1]!);
-    for (const t of [0x22, 0x24, 0x38, 0x4a]) expect(types.has(t), `pool type ${t.toString(16)}`).toBe(true);
-    // the team arena's rope shake writes into the BG maps, where the singles maps have the posts
-    expect(types.has(0x7c), 'no team rope shake').toBe(false);
-    // the rope tiles (list 72's DC00 part) are in the bank, the team wrestlers keep VRAM D000-FFFF
-    expect(g.m.objx.subarray(0x1c00, 0x2000).some((v) => v !== 0)).toBe(true);
-    // and their palettes: the items' palette 7 (palette list 4: CB:FBC0), not the 4th wrestler's
-    const items = Array.from({ length: 32 }, (_, i) => g.m.rom.u8(0xcbfbc0 + i));
-    expect(Array.from(g.m.cgramx.subarray(0xe2, 0x100))).toEqual(items.slice(2));
-    expect(Array.from(g.m.cgram.subarray(0x1e2, 0x200))).not.toEqual(items.slice(2));
-    const classic = fight(classicRules);
-    expect(classic.m.objx.every((v) => v === 0)).toBe(true);
-    expect(classic.m.oamx.every((v) => v === 0)).toBe(true);
-  }, 60_000);
-
-  it('full arena: twice the CPU, so four wrestlers do not slow the game down', () => {
-    const count = (g: Game) => {
-      let frames = 0;
-      g.runner.split(0xc00f82);
-      g.runner.override(0xc00f81, (c) => {
-        frames++;
-        return g.runner.original(c, 0xc00f81);
-      });
-      for (let f = 0; f < 300; f++) g.step([PAD.RIGHT, 0, 0, 0]);
-      return frames;
-    };
-    const arena = fight(teamArenaRules);
-    expect(arena.m.overclock).toBe(1);
-    expect(count(arena)).toBeGreaterThanOrEqual(298);
-    expect(fight(classicRules).m.overclock).toBe(0);
-  }, 60_000);
-
-  it('full arena: the wide picture (400 px) shows the sides, the SNES picture is its middle', () => {
-    const g = fight(teamArenaRules);
-    expect(g.m.wide).toBe(72);
-    const wide = new Renderer(g.m, 400);
-    const narrow = new Renderer(g.m, WIDTH);
-    g.m.onLine = (y) => {
-      wide.line(y);
-      narrow.line(y);
-    };
-    for (let f = 0; f < 120; f++) g.step([PAD.LEFT, 0, 0, 0]);
-    const x = w16(g, 0x1a84);
-    expect(x).toBeGreaterThanOrEqual(0x20 + 72);
-    expect(x).toBeLessThanOrEqual(0x160 - 72);
-    // the sides are drawn (the arena, not black), and pieces beyond the 256 carry their real x
-    const side = Array.from({ length: HEIGHT }, (_, y) => wide.pixels[y * 400 + 10]!);
-    expect(side.filter((p) => p !== 0).length).toBeGreaterThan(HEIGHT / 2);
-    expect(Array.from(g.m.oamx).some((v) => (v & 2) !== 0)).toBe(true);
-    // BG1 / BG2 / BG3 of the middle are the SNES picture where no sprite reaches the sides
-    let same = 0;
-    for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) if (wide.pixels[y * 400 + 72 + x] === narrow.pixels[y * WIDTH + x]) same++;
-    expect(same / (WIDTH * HEIGHT)).toBeGreaterThan(0.95);
-  }, 60_000);
-
-  it('a 400 px renderer shows a classic match as the SNES picture between black sides', () => {
-    const g = fight(classicRules);
-    const wide = new Renderer(g.m, 400);
-    const narrow = new Renderer(g.m, WIDTH);
-    g.m.onLine = (y) => {
-      wide.line(y);
-      narrow.line(y);
-    };
-    g.step([0, 0, 0, 0]);
-    for (let y = 0; y < HEIGHT; y++) {
-      expect(Array.from(wide.pixels.subarray(y * 400 + 72, y * 400 + 72 + WIDTH))).toEqual(Array.from(narrow.pixels.subarray(y * WIDTH, (y + 1) * WIDTH)));
-      expect(wide.pixels[y * 400]).toBe(0);
-    }
-  }, 60_000);
-
-  it('full arena: a rollback restores the camera, the items and the floor', () => {
-    const start = fight(teamArenaRules, 2).m.save();
-    const pad = (slot: number, f: number) => {
-      let h = Math.imul((f >> 3) + 1, 0x9e3779b1) ^ Math.imul(slot + 5, 0x85ebca6b);
-      h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
-      return (h ^ (h >>> 12)) & 0xfff0;
-    };
-    const frames = 300;
-    const straight = new Game(loadRom());
-    installRules(straight, teamArenaRules);
-    straight.m.load(start);
-    for (let f = 0; f < frames; f++) straight.step([pad(0, f), pad(1, f), 0, 0]);
-
-    const g = new Game(loadRom());
-    installRules(g, teamArenaRules);
-    g.m.load(start);
-    const session = new Rollback(g, { players: 2 });
-    for (let f = 0; f < frames; f++) {
-      session.addInput(0, f, pad(0, f));
-      if (f >= 4) session.addInput(1, f - 4, pad(1, f - 4)); // pad 2 arrives four frames late
-      session.advance();
-    }
-    for (let f = frames - 4; f < frames; f++) session.addInput(1, f, pad(1, f));
-    session.sync();
-    expect(session.rollbacks).toBeGreaterThan(0);
-    expect(checksum(g.m.save())).toBe(checksum(straight.m.save()));
   }, 60_000);
 });
