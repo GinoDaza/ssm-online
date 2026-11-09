@@ -109,7 +109,7 @@ button:disabled {
   margin: 0;
 }
 
-/* the game: black screen, integer scale */
+/* the game: black screen, filled */
 .game {
   position: fixed;
   inset: 0;

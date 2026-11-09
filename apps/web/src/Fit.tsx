@@ -1,8 +1,9 @@
 /**
  * Screen geometry. Menus are designed on a fixed 1600x900 screen that Fit scales to the
  * window (CSS zoom), so they fit without scrolling on 16:9 and 16:10 alike; text is 24 px,
- * never under 16 px, at that size. The game picture uses the largest integer scale that fits
- * the window, so pixels stay sharp.
+ * never under 16 px, at that size. The game picture fills the window as far as its aspect
+ * allows (any scale, not only whole ones: a window a little short of 4x would otherwise drop
+ * to 3x with wide black borders); pixels stay hard-edged (image-rendering: pixelated).
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { HEIGHT, WIDTH } from '@ssm/core';
@@ -32,8 +33,8 @@ export function Fit({ children }: { children: ReactNode }) {
   );
 }
 
-/** Integer scale of a game picture `width` pixels wide for the window (at least 1). */
+/** Scale of a game picture `width` pixels wide that fills the window (aspect kept). */
 export function useGameScale(width = WIDTH): number {
   const [w, h] = useWindowSize();
-  return Math.max(1, Math.floor(Math.min(w / width, h / HEIGHT)));
+  return Math.min(w / width, h / HEIGHT);
 }

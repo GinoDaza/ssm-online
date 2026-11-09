@@ -182,7 +182,7 @@ function Lobby({ room, rules, setRules, onStart, onBack }: RulesProps & { room: 
   );
 }
 
-/** The game alone on a black screen, at an integer scale. Esc leaves. */
+/** The game alone on a black screen, filling it. Esc leaves. */
 function GameView({ rom, online, rules, onBack }: { rom: Uint8Array; online: Online | null; rules: Ruleset; onBack: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const scale = useGameScale(rules.screenWidth);
