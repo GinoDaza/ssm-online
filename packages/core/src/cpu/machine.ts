@@ -99,6 +99,14 @@ export class Machine {
    * the lines above the first drawn one, and from this one down, with the picture.
    */
   tall = 0;
+  /**
+   * With `tall`, the HUD (BG3) moves to the new edges (extension): BG3 lines before `hudTop`
+   * rise `hudLift` lines, lines from `hudBottom` on drop `hudDrop` lines.
+   */
+  hudTop = 0;
+  hudLift = 0;
+  hudBottom = 0;
+  hudDrop = 0;
   /** the sound unit (SPC700 + DSP), its state in the same buffer */
   readonly apu = new Apu(this.state.subarray(APU, STATE_SIZE));
   readonly rom: RomImage;
@@ -879,7 +887,8 @@ export class Machine {
       this.wmaddr, this.vmaddr, this.cgaddr, this.oamaddr, this.mulA, this.rdmpy, this.rddiv, this.divDividend,
       this.cyc, this.vline, this.hMax, this.event, this.hNext, this.refresh, this.field, this.irqAt,
       this.irqLine ? 1 : 0, this.iChange, this.waiting ? 1 : 0, this.fast, this.nmiFlag, this.hdma,
-      this.hdmaEnded, this.frames, this.overclock, this.wide, this.tall];
+      this.hdmaEnded, this.frames, this.overclock, this.wide, this.tall,
+      this.hudTop, this.hudLift, this.hudBottom, this.hudDrop];
   }
 
   /** Size of a snapshot in bytes. */
@@ -940,6 +949,10 @@ export class Machine {
     this.overclock = w(33);
     this.wide = w(34);
     this.tall = w(35);
+    this.hudTop = w(36);
+    this.hudLift = w(37);
+    this.hudBottom = w(38);
+    this.hudDrop = w(39);
     this.brk = this.irqAt;
     this.frameDone = false;
   }

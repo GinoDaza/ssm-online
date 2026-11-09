@@ -78,10 +78,12 @@ describe.skipIf(!haveRom())('team matches in the singles arena: graphics', () =>
     };
     const g = fight(teamArenaRules);
     expect(g.m.tall).toBe(215);
+    expect([g.m.hudTop, g.m.hudLift, g.m.hudBottom, g.m.hudDrop]).toEqual([63, 23, 201, 6]);
     expect(drawn(g)).toEqual(Array.from({ length: HEIGHT }, (_, y) => y));
     expect(w16(g, 0x1a8d)).toBeGreaterThanOrEqual(31);
     const classic = fight(classicRules);
     expect(classic.m.tall).toBe(0);
+    expect(classic.m.hudLift).toBe(0);
     expect(drawn(classic)).toEqual(Array.from({ length: 184 }, (_, y) => 31 + y));
   }, 60_000);
 });

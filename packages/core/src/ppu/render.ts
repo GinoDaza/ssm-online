@@ -21,7 +21,8 @@
  *
  * And taller: while Machine.tall is set, the forced-blank lines above the first drawn line are
  * drawn with that line's state, and the lines from Machine.tall down with the state of the line
- * before it (after it the game is already uploading the next frame).
+ * before it (after it the game is already uploading the next frame). The HUD (BG3) bands at
+ * the top and bottom move to the new edges (Machine.hudTop / hudLift / hudBottom / hudDrop).
  */
 import { type Machine, PpuReg } from '../cpu/machine.ts';
 
@@ -306,7 +307,17 @@ export class Renderer {
     const shift = big ? 4 : 3;
     const hofs = m.ppu[PpuReg.HOFS + n]! & 0x3ff;
     const vofs = m.ppu[PpuReg.VOFS + n]! & 0x3ff;
-    const Y = (y + vofs + 1) & 0x3ff;
+    let line = y;
+    if (middle && m.tall !== 0) {
+      if (y < m.hudTop) {
+        line = y + m.hudLift;
+        if (line >= m.hudTop) return;
+      } else if (y >= m.hudBottom) {
+        line = y - m.hudDrop;
+        if (line < m.hudBottom) return;
+      }
+    }
+    const Y = (line + vofs + 1) & 0x3ff;
     const ty = (Y >> shift) & 63;
     const tileBytes = 8 * bpp;
     const from = middle ? -this.origin : this.x0;

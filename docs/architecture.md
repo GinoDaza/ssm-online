@@ -96,7 +96,9 @@ unchanged (checked to the clock against the emulator). Besides the sites:
 - Full height (`Ruleset.fullHeight`, `Machine.tall`): a match shows lines 31-214, with forced
   blank around them; the renderer fills the 224 lines with that picture (the lines above with
   the state of line 31, those below with that of line 214, before the upload IRQ at 215), and
-  the camera y stays at 31 or more so the top shows no more than the original's did.
+  the camera y stays at 31 or more so the top shows no more than the original's did. The HUD
+  (BG3: faces, names and bars in lines 31-62, the clock in 201-214) moves to the new edges,
+  23 lines up and 6 down (`Machine.hudTop` / `hudLift` / `hudBottom` / `hudDrop`).
 - Not in team play, so not in this mode: the referee himself (singles uses object 0C00, a
   wrestler in team play).
 

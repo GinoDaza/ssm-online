@@ -23,7 +23,8 @@
  * Taller (Ruleset.fullHeight): a match shows lines 31-214 (forced blank around them, set by the
  * IRQs at lines 31 and 215); Machine.tall has the renderer fill the 224 lines with the picture
  * of those, and the camera keeps the top line where the original's was at its highest (y 31).
- * The piece cull (y -16..222) already lets every piece of the 224 lines through.
+ * The piece cull (y -16..222) already lets every piece of the 224 lines through. The HUD
+ * (BG3: faces, names and bars at the top, the clock at the bottom) moves to the new edges.
  */
 import type { Machine, Runner } from '@ssm/core';
 
@@ -36,6 +37,21 @@ const PULL_LEFT = 0xc18e99;
 /** The lines of a match picture: from PICTURE_TOP to before PICTURE_END. */
 export const PICTURE_TOP = 31;
 export const PICTURE_END = 215;
+/** The HUD (BG3) bands of a match: the top one (lines 31-62) and the clock (201-214). */
+export const HUD_TOP = 63;
+export const HUD_BOTTOM = 201;
+/** how far they move toward the full-height edges (8 lines from the top, 3 from the bottom) */
+export const HUD_LIFT = PICTURE_TOP - 8;
+export const HUD_DROP = 224 - 3 - PICTURE_END;
+
+/** Set or clear the full-height picture (Ruleset.fullHeight) on the machine. */
+export function setTall(c: Machine, on: boolean): void {
+  c.tall = on ? PICTURE_END : 0;
+  c.hudTop = on ? HUD_TOP : 0;
+  c.hudLift = on ? HUD_LIFT : 0;
+  c.hudBottom = on ? HUD_BOTTOM : 0;
+  c.hudDrop = on ? HUD_DROP : 0;
+}
 
 /** The margin of a ruleset's screen width. */
 export const marginOf = (screenWidth: number) => Math.max(0, (screenWidth - 256) >> 1);

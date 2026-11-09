@@ -28,6 +28,7 @@
  *   each drawing pass), but palette 7 holds the items' colors from that list.
  */
 import type { Machine, Runner } from '@ssm/core';
+import { setTall } from './wide.ts';
 
 const TEAM_FLAG = 0x1ba0;
 const TEAM_BIT = 0x40;
@@ -152,7 +153,7 @@ export function installSprites(r: Runner): void {
     if (!arenaPresent(c)) {
       c.oamxNext.fill(0);
       c.wide = 0; // the wide and tall picture is the arena's (wide.ts)
-      c.tall = 0;
+      setTall(c, false);
     }
     return r.original(c, 0xc00369);
   });
