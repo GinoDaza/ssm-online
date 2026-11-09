@@ -21,8 +21,14 @@
  * the x margins and the off-screen values move out by M and the clamps in by M, so the wide
  * picture stays inside the arena (x 20 - M .. 160 + M + 256 + M).
  *
- * With a taller picture (Machine.tall) the camera y is at least PICTURE_TOP, so the top line
- * shows no more of the arena than the original's top line did.
+ * With a taller picture (Machine.tall) one y rule, on the ring or the floor (tallY): the
+ * middle of the wrestlers' feet lines (depth - lift - camera y) at FEET_MIDDLE, the front one
+ * at FEET_BOTTOM at most and the back one at FEET_TOP at least while they fit (the singles
+ * floor margins, the bottom one lower), the target gliding toward it (an eighth of the way a
+ * frame, 1..4). The original ring rule keeps the front feet near line D8 (much of the crowd,
+ * no apron) and switches to the floor margins when someone is out, a jump of about 24 lines.
+ * The camera y is at least PICTURE_TOP, so the top line shows no more of the arena than the
+ * original's top line did.
  *
  * Then the original tail (C1202F: D = 0, smoothing C1BB53).
  */
@@ -43,6 +49,33 @@ function pull(near: number, far: number): number {
   if ((near ^ far) & 0x8000) return 0;
   if (far & 0x8000) return far >= near ? far : near; // both negative, compared unsigned as the code does
   return far >= near ? near : far;
+}
+
+/** the feet lines of the taller picture's camera (tallY) */
+const FEET_MIDDLE = 0xbc;
+const FEET_TOP = 0x58;
+const FEET_BOTTOM = 0xc8;
+
+/** The camera y target of the taller picture: framed on the feet lines, gliding. */
+function tallY(c: Machine, active: number[], target: number): number {
+  const w = c.wram;
+  const rd = (a: number) => w[a]! | (w[a + 1]! << 8);
+  let back = 0x7fff;
+  let front = -0x8000;
+  for (const d of active) {
+    const feet = s16(rd(d + 0x1b) - w[d + 0x71]!);
+    back = Math.min(back, feet);
+    front = Math.max(front, feet);
+  }
+  let want = ((back + front) >> 1) - FEET_MIDDLE;
+  if (front - back <= FEET_BOTTOM - FEET_TOP) {
+    if (front - want > FEET_BOTTOM) want = front - FEET_BOTTOM;
+    if (back - want < FEET_TOP) want = back - FEET_TOP;
+  }
+  const d = want - s16(target);
+  if (d === 0) return s16(target);
+  const step = Math.max(1, Math.min(4, Math.abs(d) >> 3));
+  return s16(target) + (d > 0 ? step : -step);
 }
 
 export function teamArenaCamera(c: Machine): number {
@@ -82,7 +115,8 @@ export function teamArenaCamera(c: Machine): number {
   // y
   cam = rd(0x1a8d);
   let y: number;
-  if (onFloor) {
+  if (c.tall) y = tallY(c, active, cam);
+  else if (onFloor) {
     let nearest = 0xffff;
     let deepest = 0;
     for (const d of active) {

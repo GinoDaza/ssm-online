@@ -98,7 +98,10 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   the state of line 31, those below with that of line 214, before the upload IRQ at 215), and
   the camera y stays at 31 or more so the top shows no more than the original's did. The HUD
   (BG3: faces, names and bars in lines 31-62, the clock in 201-214) moves to the new edges,
-  23 lines up and 6 down (`Machine.hudTop` / `hudLift` / `hudBottom` / `hudDrop`).
+  23 lines up and 6 down (`Machine.hudTop` / `hudLift` / `hudBottom` / `hudDrop`). The camera y
+  has one rule on the ring and the floor (`camera.ts` tallY): the middle of the wrestlers' feet
+  lines at line BC, the front one at C8 at most and the back one at 58 at least, gliding 1-4
+  lines a frame, instead of the ring rule (front feet near D8) that jumped to the floor margins.
 - Not in team play, so not in this mode: the referee himself (singles uses object 0C00, a
   wrestler in team play).
 
