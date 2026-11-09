@@ -26,6 +26,7 @@
  * And a wider picture: `wide` is how many pixels a mode shows beyond each side of the 256
  * (0 = the SNES). Sprites out there do not fit the OAM's 9-bit x, so a mode also gives an
  * entry its real x (`oamWideX`, signed, flagged by `oamx` bit 1), committed with the flags.
+ * And a taller one: `tall` (see there).
  */
 import { APU_STATE_SIZE, Apu } from '../apu/apu.ts';
 import type { RomImage } from '../rom.ts';
@@ -93,6 +94,11 @@ export class Machine {
   readonly oamWideXNext = new Int16Array(this.state.buffer, this.state.byteOffset + OAM_WIDE_X_NEXT, 0x80);
   /** pixels shown beyond each side of the 256 (extension; 0 = the SNES picture) */
   wide = 0;
+  /**
+   * The line where the game's picture ends (extension; 0 = the SNES picture): the renderer fills
+   * the lines above the first drawn one, and from this one down, with the picture.
+   */
+  tall = 0;
   /** the sound unit (SPC700 + DSP), its state in the same buffer */
   readonly apu = new Apu(this.state.subarray(APU, STATE_SIZE));
   readonly rom: RomImage;
@@ -873,7 +879,7 @@ export class Machine {
       this.wmaddr, this.vmaddr, this.cgaddr, this.oamaddr, this.mulA, this.rdmpy, this.rddiv, this.divDividend,
       this.cyc, this.vline, this.hMax, this.event, this.hNext, this.refresh, this.field, this.irqAt,
       this.irqLine ? 1 : 0, this.iChange, this.waiting ? 1 : 0, this.fast, this.nmiFlag, this.hdma,
-      this.hdmaEnded, this.frames, this.overclock, this.wide];
+      this.hdmaEnded, this.frames, this.overclock, this.wide, this.tall];
   }
 
   /** Size of a snapshot in bytes. */
@@ -933,6 +939,7 @@ export class Machine {
     this.frames = w(32);
     this.overclock = w(33);
     this.wide = w(34);
+    this.tall = w(35);
     this.brk = this.irqAt;
     this.frameDone = false;
   }

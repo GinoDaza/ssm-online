@@ -93,6 +93,10 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   sprite pieces beyond the 256 carry their real x (`Machine.oamWideX`). The game is told its
   screen is wider where it decides by it: the culls (x + a < b, seven sites), the screen pull
   C18E49, the off-screen arrows, and the camera clamps and margins.
+- Full height (`Ruleset.fullHeight`, `Machine.tall`): a match shows lines 31-214, with forced
+  blank around them; the renderer fills the 224 lines with that picture (the lines above with
+  the state of line 31, those below with that of line 214, before the upload IRQ at 215), and
+  the camera y stays at 31 or more so the top shows no more than the original's did.
 - Not in team play, so not in this mode: the referee himself (singles uses object 0C00, a
   wrestler in team play).
 

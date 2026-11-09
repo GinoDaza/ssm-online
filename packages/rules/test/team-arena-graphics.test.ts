@@ -66,4 +66,22 @@ describe.skipIf(!haveRom())('team matches in the singles arena: graphics', () =>
       expect(wide.pixels[y * 400]).toBe(0);
     }
   }, 60_000);
+
+  it('full arena: the picture fills the 224 lines, classic keeps lines 31-214', () => {
+    const drawn = (g: ReturnType<typeof fight>) => {
+      const r = new Renderer(g.m, 400);
+      r.attach();
+      for (let f = 0; f < 60; f++) g.step([PAD.UP, 0, 0, 0]);
+      const rows: number[] = [];
+      for (let y = 0; y < HEIGHT; y++) if (r.pixels.subarray(y * 400, (y + 1) * 400).some((p) => p !== 0)) rows.push(y);
+      return rows;
+    };
+    const g = fight(teamArenaRules);
+    expect(g.m.tall).toBe(215);
+    expect(drawn(g)).toEqual(Array.from({ length: HEIGHT }, (_, y) => y));
+    expect(w16(g, 0x1a8d)).toBeGreaterThanOrEqual(31);
+    const classic = fight(classicRules);
+    expect(classic.m.tall).toBe(0);
+    expect(drawn(classic)).toEqual(Array.from({ length: 184 }, (_, y) => 31 + y));
+  }, 60_000);
 });

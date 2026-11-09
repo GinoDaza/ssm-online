@@ -7,4 +7,5 @@ export const classicRules: Ruleset = {
   fighters: 4,
   singlesArena: false,
   screenWidth: 256,
+  fullHeight: false,
 };

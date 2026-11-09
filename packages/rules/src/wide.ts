@@ -19,6 +19,11 @@
  *
  * The margin is set at the match start (C02631, team matches) and cleared when the arena
  * objects are gone (sprites.ts), so menus and singles keep the SNES picture.
+ *
+ * Taller (Ruleset.fullHeight): a match shows lines 31-214 (forced blank around them, set by the
+ * IRQs at lines 31 and 215); Machine.tall has the renderer fill the 224 lines with the picture
+ * of those, and the camera keeps the top line where the original's was at its highest (y 31).
+ * The piece cull (y -16..222) already lets every piece of the 224 lines through.
  */
 import type { Machine, Runner } from '@ssm/core';
 
@@ -27,6 +32,10 @@ const PIECE_CULL = 0xc1f92c;
 const PULL_TEST = 0xc18e51;
 const PULL_RIGHT = 0xc18e72;
 const PULL_LEFT = 0xc18e99;
+
+/** The lines of a match picture: from PICTURE_TOP to before PICTURE_END. */
+export const PICTURE_TOP = 31;
+export const PICTURE_END = 215;
 
 /** The margin of a ruleset's screen width. */
 export const marginOf = (screenWidth: number) => Math.max(0, (screenWidth - 256) >> 1);

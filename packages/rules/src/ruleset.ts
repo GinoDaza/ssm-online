@@ -18,4 +18,9 @@ export interface Ruleset {
   readonly singlesArena: boolean;
   /** playfield width in pixels (original 256) */
   readonly screenWidth: number;
+  /**
+   * The match picture fills the screen's 224 lines (original false: 184, lines 31-214, black
+   * above and below).
+   */
+  readonly fullHeight: boolean;
 }

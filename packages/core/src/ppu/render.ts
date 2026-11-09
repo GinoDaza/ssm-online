@@ -18,6 +18,10 @@
  * maps, BG3 (the HUD) stays in the middle 256, sprites take their real x (Machine.oamWideX),
  * windows are taken at the nearest middle column, and the 32-sprite / 34-tile line limits are
  * lifted (more of the line is on screen). Otherwise the sides are black.
+ *
+ * And taller: while Machine.tall is set, the forced-blank lines above the first drawn line are
+ * drawn with that line's state, and the lines from Machine.tall down with the state of the line
+ * before it (after it the game is already uploading the next frame).
  */
 import { type Machine, PpuReg } from '../cpu/machine.ts';
 
@@ -123,6 +127,8 @@ export class Renderer {
   private origin = 0;
 
   private readonly m: Machine;
+  /** a tall frame (Machine.tall): its picture has started */
+  private drawn = false;
 
   constructor(m: Machine, width = WIDTH) {
     this.m = m;
@@ -162,6 +168,19 @@ export class Renderer {
   }
 
   line(y: number): void {
+    const end = this.m.tall;
+    if (end === 0) return this.draw(y);
+    if (y === 0) this.drawn = false;
+    if (this.drawn && y >= end && y < HEIGHT) return; // drawn with line end - 1
+    this.draw(y);
+    if (this.m.ioreg[0x00]! & 0x80) return;
+    if (!this.drawn) for (let k = 0; k < y; k++) this.draw(k);
+    this.drawn = true;
+    if (y === end - 1) for (let k = end; k < HEIGHT; k++) this.draw(k);
+  }
+
+  /** Draw screen line `y` from the PPU state as it is now. */
+  private draw(y: number): void {
     const m = this.m;
     const io = m.ioreg;
     const W = this.width;

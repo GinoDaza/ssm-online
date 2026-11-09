@@ -21,9 +21,13 @@
  * the x margins and the off-screen values move out by M and the clamps in by M, so the wide
  * picture stays inside the arena (x 20 - M .. 160 + M + 256 + M).
  *
+ * With a taller picture (Machine.tall) the camera y is at least PICTURE_TOP, so the top line
+ * shows no more of the arena than the original's top line did.
+ *
  * Then the original tail (C1202F: D = 0, smoothing C1BB53).
  */
 import type { Machine } from '@ssm/core';
+import { PICTURE_TOP } from './wide.ts';
 
 const SLOTS = [0x0800, 0x0a00, 0x0c00, 0x0e00];
 /** the original tail: D = 0, C1BB53, RTL */
@@ -96,7 +100,8 @@ export function teamArenaCamera(c: Machine): number {
     if (dy >= 0) dy = dy >= 4 ? dy - 4 : 0;
     y = s16(cam + dy);
   }
-  if (y < 0) y = 0;
+  const top = c.tall ? PICTURE_TOP : 0; // a taller picture (wide.ts)
+  if (y < top) y = top;
   else if (y > 0xc0) y = 0xc0;
   wr(0x1a8d, y);
   return CAMERA_TAIL;
