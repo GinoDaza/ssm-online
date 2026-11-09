@@ -100,6 +100,11 @@ export class Renderer {
   readonly pixels: Uint16Array;
   /** CGRAM colors, then the second sprite bank's palettes (Machine.cgramx) at 256-383 */
   private readonly pal = new Uint16Array(384);
+  /** the raw colors pal was made from, and the brightness (-1: none yet) */
+  private readonly palRaw = new Int32Array(384).fill(-1);
+  private palBrightness = -1;
+  /** the registers and columns the window modes were last made for */
+  private readonly windowKey = new Int32Array(12).fill(-1);
   /** this line: winning layer, its color index (CGRAM), its depth */
   private readonly layer: Uint8Array;
   private readonly color: Uint16Array;
@@ -170,16 +175,7 @@ export class Renderer {
     const inidisp = io[0x00]!;
     if (inidisp & 0x80) return;
     const xb = XB[inidisp & 15]!;
-    const cg = m.cgram;
-    for (let i = 0; i < 256; i++) {
-      const c = cg[2 * i]! | (cg[2 * i + 1]! << 8);
-      this.pal[i] = rgb565(xb[c & 31]!, xb[(c >> 5) & 31]!, xb[(c >> 10) & 31]!);
-    }
-    const cx = m.cgramx;
-    for (let i = 0; i < 128; i++) {
-      const c = cx[2 * i]! | (cx[2 * i + 1]! << 8);
-      this.pal[256 + i] = rgb565(xb[c & 31]!, xb[(c >> 5) & 31]!, xb[(c >> 10) & 31]!);
-    }
+    this.palette(inidisp & 15, xb);
     this.windows();
     this.layer.fill(BACKDROP);
     this.color.fill(0);
@@ -202,6 +198,22 @@ export class Renderer {
     this.compose(row, xb);
   }
 
+  /** CGRAM (and the bank's palettes) -> RGB565 at this brightness: only the colors that changed. */
+  private palette(brightness: number, xb: Uint8Array): void {
+    const m = this.m;
+    const raw = this.palRaw;
+    const all = brightness !== this.palBrightness;
+    this.palBrightness = brightness;
+    for (let i = 0; i < 384; i++) {
+      const src = i < 256 ? m.cgram : m.cgramx;
+      const j = i < 256 ? 2 * i : 2 * (i - 256);
+      const c = src[j]! | (src[j + 1]! << 8);
+      if (!all && raw[i] === c) continue;
+      raw[i] = c;
+      this.pal[i] = rgb565(xb[c & 31]!, xb[(c >> 5) & 31]!, xb[(c >> 10) & 31]!);
+    }
+  }
+
   /**
    * Drawing mode of every layer at every x of this line (modes[layer * 256 + x]): bit 0 = its
    * color shows (not clipped to black), bit 1 = color math allowed; 0 = the layer is not drawn
@@ -209,6 +221,14 @@ export class Renderer {
    */
   private windows(): void {
     const io = this.m.ioreg;
+    const key = this.windowKey;
+    const now = [io[0x23]!, io[0x24]!, io[0x25]!, io[0x26]!, io[0x27]!, io[0x28]!, io[0x29]!, io[0x2a]!, io[0x2b]!, (io[0x2e]! << 8) | io[0x30]!, this.x0, this.x1];
+    let same = true;
+    for (let k = 0; k < 12; k++) if (key[k] !== now[k]) {
+      same = false;
+      key[k] = now[k]!;
+    }
+    if (same) return;
     const w1l = io[0x26]!;
     const w1r = io[0x27]!;
     const w2l = io[0x28]!;
@@ -272,7 +292,12 @@ export class Renderer {
     const tileBytes = 8 * bpp;
     const from = middle ? -this.origin : this.x0;
     const to = middle ? -this.origin + WIDTH : this.x1;
-    for (let x = from; x < to; x++) {
+    const rowY = Y & (ts - 1);
+    const W = this.width;
+    const modes = this.modes;
+    const base = n * W;
+    // one 8-pixel tile row at a time: its map entry, its 2 or 4 bitplanes
+    for (let x = from; x < to; ) {
       const X = (x + this.origin + hofs) & 0x3ff;
       const tx = (X >> shift) & 63;
       let screen = 0;
@@ -280,18 +305,30 @@ export class Renderer {
       if (tall && ty >= 32) screen += wide ? 0x800 : 0x400;
       const a = (mapBase + 2 * (screen + ((ty & 31) << 5) + (tx & 31))) & 0xffff;
       const e = vram[a]! | (vram[a + 1]! << 8);
-      let col = X & (ts - 1);
-      let rowIn = Y & (ts - 1);
-      if (e & 0x4000) col = ts - 1 - col;
-      if (e & 0x8000) rowIn = ts - 1 - rowIn;
+      const colIn = X & (ts - 1);
+      const hflip = (e & 0x4000) !== 0;
+      const rowIn = e & 0x8000 ? ts - 1 - rowY : rowY;
+      // the 8-pixel half of a 16-pixel tile this x falls in, and the pixels left in it
+      const col = hflip ? ts - 1 - colIn : colIn;
+      const left = 8 - (X & 7);
       const tile = ((e & 0x3ff) + (col >> 3) + ((rowIn >> 3) << 4)) & 0x3ff;
       const t = (charBase + tile * tileBytes + 2 * (rowIn & 7)) & 0xffff;
-      const bit = 7 - (col & 7);
-      let c = ((vram[t]! >> bit) & 1) | (((vram[t + 1]! >> bit) & 1) << 1);
-      if (bpp === 4) c |= (((vram[(t + 16) & 0xffff]! >> bit) & 1) << 2) | (((vram[(t + 17) & 0xffff]! >> bit) & 1) << 3);
-      if (c === 0) continue;
+      const p0 = vram[t]!;
+      const p1 = vram[t + 1]!;
+      const p2 = bpp === 4 ? vram[(t + 16) & 0xffff]! : 0;
+      const p3 = bpp === 4 ? vram[(t + 17) & 0xffff]! : 0;
       const pal = (e >> 10) & 7;
-      this.put(x, n, bpp === 4 ? pal * 16 + c : pal * 4 + c, e & 0x2000 ? hiDepth : loDepth);
+      const palBase = bpp === 4 ? pal * 16 : pal * 4;
+      const d = e & 0x2000 ? hiDepth : loDepth;
+      const end = Math.min(to, x + left);
+      for (let k = X & 7; x < end; x++, k++) {
+        const bit = hflip ? k : 7 - k;
+        const c = ((p0 >> bit) & 1) | (((p1 >> bit) & 1) << 1) | (((p2 >> bit) & 1) << 2) | (((p3 >> bit) & 1) << 3);
+        if (c === 0 || d <= this.depth[x]! || modes[base + x] === 0) continue;
+        this.layer[x] = n;
+        this.color[x] = palBase + c;
+        this.depth[x] = d;
+      }
     }
   }
 
