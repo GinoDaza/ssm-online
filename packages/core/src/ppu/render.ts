@@ -24,7 +24,7 @@
  * before it (after it the game is already uploading the next frame). The HUD (BG3) bands at
  * the top and bottom move to the new edges (Machine.hudTop / hudLift / hudBottom / hudDrop).
  */
-import { type Machine, PpuReg } from '../cpu/machine.ts';
+import { HUDX_COLS, HUDX_ROWS, HUDX_TILE0, type Machine, OBJX_BANK2, PpuReg } from '../cpu/machine.ts';
 
 export const WIDTH = 256;
 export const HEIGHT = 224;
@@ -103,10 +103,10 @@ export class Renderer {
   readonly width: number;
   /** the frame, RGB565 (the oracle's pixel format), row by row */
   readonly pixels: Uint16Array;
-  /** CGRAM colors, then the second sprite bank's palettes (Machine.cgramx) at 256-383 */
-  private readonly pal = new Uint16Array(384);
+  /** CGRAM colors, then the extra sprite banks' palettes (Machine.cgramx) at 256-383 and 384-511 */
+  private readonly pal = new Uint16Array(512);
   /** the raw colors pal was made from, and the brightness (-1: none yet) */
-  private readonly palRaw = new Int32Array(384).fill(-1);
+  private readonly palRaw = new Int32Array(512).fill(-1);
   private palBrightness = -1;
   /** the registers and columns the window modes were last made for */
   private readonly windowKey = new Int32Array(12).fill(-1);
@@ -121,7 +121,7 @@ export class Renderer {
   private readonly objPrio: Uint8Array;
   /** drawing mode of each layer at each x of this line (see windows()) */
   private readonly modes: Uint8Array;
-  private readonly spriteList = new Int16Array(256);
+  private readonly spriteList = new Int16Array(512);
   /** this line: the columns drawn [x0, x1) and the SNES x of column 0 (negative: a side) */
   private x0 = 0;
   private x1 = WIDTH;
@@ -224,7 +224,7 @@ export class Renderer {
     const raw = this.palRaw;
     const all = brightness !== this.palBrightness;
     this.palBrightness = brightness;
-    for (let i = 0; i < 384; i++) {
+    for (let i = 0; i < 512; i++) {
       const src = i < 256 ? m.cgram : m.cgramx;
       const j = i < 256 ? 2 * i : 2 * (i - 256);
       const c = src[j]! | (src[j + 1]! << 8);
@@ -360,6 +360,51 @@ export class Renderer {
         this.depth[x] = d;
       }
     }
+    if (middle && m.hudxRows) this.hudPanels(ty, rowY, charBase, hiDepth, loDepth);
+  }
+
+  /** The HUD panels (Machine.hudx) in the margins, on BG3 tile row `ty`, pixel row `rowY`. */
+  private hudPanels(ty: number, rowY: number, charBase: number, hiDepth: number, loDepth: number): void {
+    const m = this.m;
+    const r = ty - m.hudxRow;
+    if (r < 0 || r >= m.hudxRows || r >= HUDX_ROWS) return;
+    const modes = this.modes;
+    const base = 2 * this.width;
+    const left = -this.origin - 8 * HUDX_COLS;
+    const right = -this.origin + WIDTH;
+    for (let panel = 0; panel < 2; panel++) {
+      const x0 = panel === 0 ? left : right;
+      for (let col = 0; col < HUDX_COLS; col++) {
+        const a = 2 * ((panel * HUDX_ROWS + r) * HUDX_COLS + col);
+        const e = m.hudxMap[a]! | (m.hudxMap[a + 1]! << 8);
+        const tile = e & 0x3ff;
+        if (tile === 0) continue;
+        const rowIn = e & 0x8000 ? 7 - rowY : rowY;
+        let p0: number, p1: number;
+        if (tile >= HUDX_TILE0) {
+          const t = (tile - HUDX_TILE0) * 16 + 2 * rowIn;
+          p0 = m.hudxTiles[t]!;
+          p1 = m.hudxTiles[t + 1]!;
+        } else {
+          const t = (charBase + tile * 16 + 2 * rowIn) & 0xffff;
+          p0 = m.vram[t]!;
+          p1 = m.vram[t + 1]!;
+        }
+        const hflip = (e & 0x4000) !== 0;
+        const palBase = ((e >> 10) & 7) * 4;
+        const d = e & 0x2000 ? hiDepth : loDepth;
+        for (let k = 0; k < 8; k++) {
+          const x = x0 + 8 * col + k;
+          if (x < this.x0 || x >= this.x1) continue;
+          const bit = hflip ? k : 7 - k;
+          const c = ((p0 >> bit) & 1) | (((p1 >> bit) & 1) << 1);
+          if (c === 0 || d <= this.depth[x]! || modes[base + x] === 0) continue;
+          this.layer[x] = 2;
+          this.color[x] = palBase + c;
+          this.depth[x] = d;
+        }
+      }
+    }
   }
 
   /** This line's sprite pixels, with the oracle's 32-sprite and 34-tile limits. */
@@ -374,12 +419,16 @@ export class Renderer {
     this.objColor.fill(0);
     const list = this.spriteList;
     const wide = this.x0 < -this.origin || this.x1 > -this.origin + WIDTH;
-    const maxCount = wide ? 128 : 32;
+    const maxCount = wide ? 256 : 32;
     let count = 0;
     let tiles = wide ? 1 << 20 : 34;
+    // entries 128 and up are the second OAM's (Machine.oamExt), drawn below the OAM's
+    const tableOf = (s: number) => (s < 128 ? oam : m.oamExt);
     const hposOf = (s: number) => {
       if (wide && m.oamx[s]! & 2) return m.oamWideX[s]!;
-      const x = oam[4 * s]! | (((oam[512 + (s >> 2)]! >> (2 * (s & 3))) & 1) << 8);
+      const t = tableOf(s);
+      const e = s & 127;
+      const x = t[4 * e]! | (((t[512 + (e >> 2)]! >> (2 * (e & 3))) & 1) << 8);
       return x >= 256 ? x - 512 : x;
     };
     const visibleTiles = (s: number, w: number) => {
@@ -389,36 +438,45 @@ export class Renderer {
     };
     const left = this.x0 + this.origin;
     const right = this.x1 + this.origin;
-    for (let s = 0; s < 128; s++) {
-      const large = (oam[512 + (s >> 2)]! >> (2 * (s & 3) + 1)) & 1;
+    const entries = 128 + m.oamExtCount;
+    for (let s = 0; s < entries; s++) {
+      const t = tableOf(s);
+      const e = s & 127;
+      const large = (t[512 + (e >> 2)]! >> (2 * (e & 3) + 1)) & 1;
       const w = size[2 * large]!;
       const h = size[2 * large + 1]!;
       let hp = hposOf(s);
       if (hp === -256 && !wide) hp = 0;
       if (!(hp > left - w && hp <= (wide ? right : 256))) continue;
-      const line = (y - oam[4 * s + 1]!) & 0xff;
+      const line = (y - t[4 * e + 1]!) & 0xff;
       if (line >= h || count >= maxCount) continue;
       if (!wide) tiles -= visibleTiles(s, w);
       list[2 * count] = s;
-      list[2 * count + 1] = oam[4 * s + 3]! & 0x80 ? line ^ (w - 1) : line;
+      list[2 * count + 1] = t[4 * e + 3]! & 0x80 ? line ^ (w - 1) : line;
       count++;
     }
     for (let k = 0; k < count; k++) {
       const s = list[2 * k]!;
       const line = list[2 * k + 1]!;
-      const large = (oam[512 + (s >> 2)]! >> (2 * (s & 3) + 1)) & 1;
+      const tb = tableOf(s);
+      const e = s & 127;
+      const large = (tb[512 + (e >> 2)]! >> (2 * (e & 3) + 1)) & 1;
       const w = size[2 * large]!;
       if (!wide) tiles += visibleTiles(s, w);
       if (tiles <= 0) continue;
-      const attr = oam[4 * s + 3]!;
-      const bank = m.oamx[s]! & 1 ? m.objx : null; // the second sprite bank (Machine extension)
-      const name = oam[4 * s + 2]! | ((attr & 1) << 8);
+      const attr = tb[4 * e + 3]!;
+      // the extra sprite banks (Machine extension): bank 1 (bit 0) or bank 2 (bit 2)
+      const flags = m.oamx[s]!;
+      const bankNo = flags & 1 ? 1 : flags & 4 ? 2 : 0;
+      const bank = bankNo ? m.objx : null;
+      const bankAt = bankNo === 2 ? OBJX_BANK2 : 0;
+      const name = tb[4 * e + 2]! | ((attr & 1) << 8);
       const hflip = (attr & 0x40) !== 0;
       const rowTile = (((line << 1) + (name & 0xf0)) & 0xf0) | (name & 0x100);
       let tileX = name & 0x0f;
       const inc = hflip ? -1 : 1;
       if (hflip) tileX = (tileX + (w >> 3) - 1) & 0x0f;
-      const pal = (bank ? 256 : 128) + ((attr >> 1) & 7) * 16;
+      const pal = (bankNo === 0 ? 128 : 128 + 128 * bankNo) + ((attr >> 1) & 7) * 16;
       const prio = (attr >> 4) & 3;
       const hpos = hposOf(s);
       let X = hpos === -256 && !wide ? 256 : hpos;
@@ -429,7 +487,7 @@ export class Renderer {
         const tile = rowTile | tileX;
         let p0: number, p1: number, p2: number, p3: number;
         if (bank) {
-          const a = (tile << 5) + 2 * (line & 7);
+          const a = bankAt + (tile << 5) + 2 * (line & 7);
           p0 = bank[a]!;
           p1 = bank[a + 1]!;
           p2 = bank[a + 16]!;

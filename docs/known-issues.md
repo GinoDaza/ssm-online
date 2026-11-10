@@ -12,6 +12,22 @@ Bugs that are understood but not fixed yet, with their cause and the planned fix
   play the fixed color is 0, so only the results screen (and any flash) changes. Not checked:
   whether the singles results screen shows the same in the original.
 
+## 3 vs 3 and 4 vs 4
+
+- **The extra wrestlers are always the CPU's, and the game picks their characters** (the first
+  of the cast nobody picked). Humans play the original four slots. Fix: a selection for the
+  extras (the planned character-select menu in the client) and their pads (`+77` = a pad
+  number; C110CB reads pads by it).
+- **The time-over count-up on the result screen shows the four base wrestlers' bars only**
+  (C05B27 counts first members, then second). The judge adds the extras' bars, so the result is
+  right; the count does not show them.
+- **At most two pins are counted at the same time**: the original referee has two counters (the
+  pin-count marks C21F84 read them); a third pin waits until one is free.
+- **A give-up does not show the given-up wrestler's name** (the hold queue's display, C10EAF /
+  C008D6, is left out of the ported referee).
+- **No off-screen arrows for the extras**: the arena creates one arrow object (4A) per base
+  wrestler.
+
 ## 1 vs 1 in the full arena
 
 - **The PRESS / START labels at the bottom are split.** In a wide singles match the 2P labels

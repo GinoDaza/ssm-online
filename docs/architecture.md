@@ -6,7 +6,7 @@
 apps/server      reads and checks the ROM, serves it and the client, WebSocket rooms (/ws)
 apps/web         React client: loads the ROM, runs the game
 packages/core    the game: 65816 -> JS translator, Machine, Game, the picture (ppu/), the sound unit (apu/)
-packages/rules   game modes (Ruleset) and their overrides: classic, 2 vs 2 in the full arena
+packages/rules   game modes (Ruleset) and their overrides: classic, the full arena (2 vs 2, 3 vs 3, 4 vs 4)
 tools/oracle     emulator dumps (WRAM, CPU and sound state, picture, sound) and captured routine calls, for tests (needs ../ssm-disasm)
 tools/           compare-frames.ts / compare-video.ts (game vs emulator), disasm.ts (ROM), check-core-purity.mjs
 ```
@@ -119,8 +119,55 @@ original screen has two panels (SINGLE MATCH, TEAM BATTLE ROYAL) in BG1 with the
 BG2; this mode rebuilds them as four narrower panels (a 5 x 10 tile window of the singles
 picture, three of the team one) with labels in the game's own font, and left / right move
 between them. The choice is kept in `Machine.rulesWord` (a word the modes own, saved with the
-state); 2 VS 2 and up set the team bit, so 3 VS 3 and 4 VS 4 play as 2 VS 2 for now. Classic
-keeps the original screen (`rules/test/menu.test.ts`).
+state); 2 VS 2 and up set the team bit. Classic keeps the original screen
+(`rules/test/menu.test.ts`).
+
+**3 vs 3 and 4 vs 4** (the menu's 3 VS 3 / 4 VS 4 in the full arena, `rules/src/teams.ts`). A
+Team Battle Royal with one or two more wrestlers a team, run by the original team engine. The
+players pick the four wrestlers of the original selection (up to four humans); the extras are
+the CPU's, with the characters nobody picked. The team size is set at the match start (C189BC)
+in `Machine.rulesWord`.
+
+- Memory (`slots.ts`): low WRAM (0000-1FFF, where the wrestlers' pages 0800-0FFF are, run with
+  D = the page) is full. `Machine.ramExt` maps 6000-7FFF of banks 00-3F / 80-BF (unmapped on
+  this cartridge) to WRAM 7E:6000-7FFF, which the game leaves alone from the menus to the end
+  of a match (the result and continue screens use it as a buffer), so the extras' pages are
+  6800-6E00 (slot numbers 4-7, wrestler numbers 5-8) and the mode's state of a match is at
+  7E:6400.
+- The team engine reaches its wrestlers by loops over four pages (D or X from 0800 by 200, a
+  count of 4): each loop gets its count and its step (after 0E00 the extras) through two small
+  overrides: the match start (C189BC: the extras' characters, places, sides and opponents),
+  the team frame (C11BD3: input, AI and targets, motion, pair resolution, partner follow, the
+  camera's stats), the contact root (C1A9C7), the object loop (C12299), the walk-in (C1F0F9),
+  the ring shake (C216CB). The contact pairs (each wrestler of a team against each of the
+  other: 4 in the original, a table at 1A9C) are built for 9 / 16, and the scripts hits ask for
+  (+87) run for the extras too, through a return address in a ROM gap.
+- Pointers between wrestlers: +A5 the partner, +A7 / +A9 the current and previous opponent (a
+  hit makes each the other's current one), +F0 / +F2 the two opponents a human's target choice
+  ranks. With three or four opponents, +F0 / +F2 are the two nearest in play, and a partner or
+  opponent who is gone (+76 = 0) is replaced, never while the wrestler pins or holds (+D0).
+- The team referee (`referee.ts`): the original keeps a pin slot per wrestler in arrays of four
+  and turns wrestler numbers 1-4 into pages; it is ported to TypeScript for eight, with its rule
+  (counts, falls, releases, holds, members left, round end, no contest, time over) and the
+  original's two counters (the pin-count marks read them). The time-over sums (C10E6E) and the
+  judge on the counted bars (C10D3B) take every member; the judge of C11BD3 too.
+- Graphics (`sprites.ts`): each extra mirrors a base slot (its tile base +05 and palette), in a
+  third sprite bank (Machine extension: `objx` bank 2, VMAIN bit 5, `oamx` bit 2, its own
+  palettes in `cgramx`). Its frames are copied from the ROM to bank 2 directly when the IRQ
+  builds the DMA list (C00971), so they take no DMA list room or upload time; its palette
+  loader (C18B7D) writes bank 2's palettes 4-7.
+- More sprites (`oamext.ts`): four wrestlers already fill most of the 128 OAM entries. In these
+  matches a full OAM is put aside and the pass goes on in the same buffer, which becomes a
+  second OAM (`Machine.oamExt`, 128 entries drawn below the first) committed with the OAM.
+- HUD (`hud.ts`): the team HUD has four blocks across the SNES screen; the extras' (face, name,
+  life bar, as C06185 / C0607D draw them) are in HUD panels beside it, in the wide picture's
+  margins (Machine extension `hudx`: BG3 map entries and 64 tiles of its own, which hold the
+  extras' portrait blocks, copied from WRAM 7E:9000 when the match load copies the players').
+- Speed: six or eight wrestlers get four times the CPU (`Machine.overclock` = 2).
+
+`rules/test/big-teams.test.ts` plays both from power-on: every wrestler in and fighting, drawn
+from bank 2 and the second OAM, the HUD panels, a time over judged with the extras' life, and a
+rollback in a 4 vs 4 match.
 
 `rules/test/team-arena.test.ts` drives player 1 with a bot (`test/bot.ts`: goals checked
 against WRAM) through a Team Battle Royal reached from power-on: classic keeps the ropes shut,

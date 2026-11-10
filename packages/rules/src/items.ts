@@ -16,13 +16,13 @@
  * Every return address lives on the game's stack, so rollback snapshots hold it.
  */
 import type { Machine, Runner } from '@ssm/core';
+import { pages } from './slots.ts';
 
 /** A never-executed address (padding of FF bytes, C07E57-C07FFF) used as a return target. */
 export const RETURN = 0xc07f00;
 
 const TEAM_FLAG = 0x1ba0;
 const TEAM_BIT = 0x40;
-const SLOTS = [0x0800, 0x0a00, 0x0c00, 0x0e00];
 
 const isTeam = (c: Machine) => (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0;
 
@@ -48,7 +48,7 @@ export function installItems(r: Runner): void {
     if (!isTeam(c)) return r.original(c, 0xc1102f);
     c.tick(6 * c.fast);
     let side = 0;
-    for (const d of SLOTS) side |= c.read16(d + 0x6f);
+    for (const d of pages(c)) side |= c.read16(d + 0x6f);
     c.a = side;
     c.n = (side & 0x8000) !== 0;
     c.z = side === 0;

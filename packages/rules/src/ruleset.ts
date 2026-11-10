@@ -7,8 +7,6 @@ export interface Ruleset {
   readonly id: string;
   /** shown in the menus */
   readonly label: string;
-  /** fighters in a team match (original 4; singles are always 2) */
-  readonly fighters: number;
   /**
    * Team matches in the singles environment: the singles arena (with the floor around the
    * ring and the front crowd), its camera, the ringside items and the ring exits. The team

@@ -20,6 +20,7 @@
  *   the team flow reads it as a time over.
  */
 import type { Machine, Runner } from '@ssm/core';
+import { bigTeams, pages, sideOf } from './slots.ts';
 
 const TEAM_FLAG = 0x1ba0;
 const TEAM_BIT = 0x40;
@@ -35,8 +36,13 @@ const FIGHT = 0x1a;
 
 const isTeam = (c: Machine) => (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0;
 
-/** Team A (with 0800) and team B, by the pairing `$1C88` (C10E6E). */
+/** Team A (with 0800) and team B, by the pairing `$1C88` (C10E6E); bigger teams by side. */
 function teams(c: Machine): [number[], number[]] {
+  if (bigTeams(c)) {
+    const a = sideOf(c, 0x0800);
+    const all = pages(c);
+    return [all.filter((p) => sideOf(c, p) === a), all.filter((p) => sideOf(c, p) !== a)];
+  }
   return c.wram[0x1c88] === 0 ? [[0x800, 0xa00], [0xc00, 0xe00]] : [[0x800, 0xc00], [0xa00, 0xe00]];
 }
 
@@ -50,7 +56,7 @@ function pose(c: Machine, entry: number): void {
 }
 
 /** C00B2C: a sound into the queue 03E0. */
-function sound(c: Machine, id: number): void {
+export function sound(c: Machine, id: number): void {
   const x = c.wram[0xfe]!;
   c.wram[0x3e0 + x] = id;
   c.wram[0x3e1 + x] = 0;

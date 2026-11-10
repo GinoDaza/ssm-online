@@ -14,12 +14,26 @@
  * copy. Registers are mirrored into it by save() / load().
  *
  * One extension beyond the SNES, for game modes (the original never uses it, checked over its
- * VMAIN writes): a second sprite bank. `objx` holds 512 sprite tiles laid out as the sprite
- * tables are (tile n at n * 32); with VMAIN ($2115) bit 6 set, VRAM writes into the sprite
- * tables go there instead of VRAM. An OAM entry whose `oamx` byte is set takes its tiles from
- * it, and its colors from the bank's own sprite palettes (`cgramx`). Modes set `oamxNext`
- * while the frame builds the OAM; a DMA of the whole OAM commits it
- * to `oamx`, so the flags change with the entries they describe.
+ * VMAIN writes): two more sprite banks. `objx` holds two banks of 512 sprite tiles each, laid
+ * out as the sprite tables are (tile n at n * 32; bank 2 from 0x4000); with VMAIN ($2115) bit 6
+ * set, VRAM writes into the sprite tables go to bank 1 instead of VRAM, with bit 5 to bank 2.
+ * An OAM entry whose `oamx` byte has bit 0 (bank 1) or bit 2 (bank 2) takes its tiles from that
+ * bank, and its colors from the bank's own sprite palettes (`cgramx`: bank 1, then bank 2).
+ * Modes set `oamxNext` while the frame builds the OAM; a DMA of the whole OAM commits it to
+ * `oamx`, so the flags change with the entries they describe.
+ *
+ * And more sprites: `oamExt` is a second OAM (128 entries, the same layout as the OAM, drawn
+ * after it, so below it), of which the first `oamExtCount` are shown; modes fill `oamExtNext`
+ * and `oamExtCountNext`, committed with the OAM (entries 128-255 of `oamx` / `oamWideX`).
+ *
+ * And HUD panels beside the SNES screen (`hudx`): with `hudxRows` set, the renderer draws a
+ * left and a right panel of BG3 tiles in the wide picture's margins (9 columns each), on the
+ * BG3 tile rows `hudxRow` .. + hudxRows, moved as the HUD is. Panel entries are BG3 map
+ * entries; tiles 3C0-3FF come from the panels' own 64 tiles (`hudxTiles`, 2 bpp).
+ *
+ * And more work RAM: with `ramExt` (set by a mode before the game runs), 6000-7FFF of banks
+ * 00-3F / 80-BF (unmapped on this cartridge) reach WRAM 7E:6000-7FFF, which the game never
+ * uses, so direct-page code can run on objects there.
  *
  * Another: `overclock` (see tick), a faster CPU against the same video timing.
  *
@@ -41,12 +55,25 @@ const PPU = IOREG + 0x400;
 const REGS = PPU + 2 * 16;
 const REG_WORDS = 48;
 const OBJX = REGS + 4 * REG_WORDS;
-const OAMX = OBJX + 0x4000;
-const OAMX_NEXT = OAMX + 0x80;
-const CGRAMX = OAMX_NEXT + 0x80;
-const OAM_WIDE_X = CGRAMX + 0x100;
-const OAM_WIDE_X_NEXT = OAM_WIDE_X + 0x100;
-const APU = OAM_WIDE_X_NEXT + 0x100;
+const OAMX = OBJX + 0x8000;
+const OAMX_NEXT = OAMX + 0x100;
+const CGRAMX = OAMX_NEXT + 0x100;
+const OAM_WIDE_X = CGRAMX + 0x200;
+const OAM_WIDE_X_NEXT = OAM_WIDE_X + 0x200;
+const OAM_EXT = OAM_WIDE_X_NEXT + 0x200;
+const OAM_EXT_NEXT = OAM_EXT + 0x220;
+/** HUD panels (extension): rows and columns of each, and the first tile of the panels' own */
+export const HUDX_ROWS = 8;
+export const HUDX_COLS = 9;
+export const HUDX_TILE0 = 0x3c0;
+const HUDX_MAP_BYTES = 2 * HUDX_ROWS * HUDX_COLS * 2;
+const HUDX_TILES = OAM_EXT_NEXT + 0x220;
+const HUDX_MAP = HUDX_TILES + 0x400;
+const APU = HUDX_MAP + HUDX_MAP_BYTES;
+/** the second sprite bank in objx */
+export const OBJX_BANK2 = 0x4000;
+/** the WRAM that ramExt maps into banks 00-3F / 80-BF */
+export const RAM_EXT = [0x6000, 0x8000] as const;
 const STATE_SIZE = APU + APU_STATE_SIZE;
 
 /** PPU registers that are more than their last written byte (Machine.ppu, 16-bit words). */
@@ -82,16 +109,34 @@ export class Machine {
   readonly ioreg = this.state.subarray(IOREG, IOREG + 0x400);
   /** PPU register state beyond ioreg (PpuReg); little-endian words in the state buffer */
   readonly ppu = new Uint16Array(this.state.buffer, PPU, 16);
-  /** the second sprite bank (extension): 512 tiles, tile n at n * 32 */
-  readonly objx = this.state.subarray(OBJX, OBJX + 0x4000);
-  /** per OAM entry: 1 = its tiles come from objx (extension); set by the next full OAM DMA */
-  readonly oamx = this.state.subarray(OAMX, OAMX + 0x80);
-  readonly oamxNext = this.state.subarray(OAMX_NEXT, OAMX_NEXT + 0x80);
-  /** the second bank's own sprite palettes (extension): 8 x 16 colors, as CGRAM 80-FF */
-  readonly cgramx = this.state.subarray(CGRAMX, CGRAMX + 0x100);
+  /** the extra sprite banks (extension): 512 tiles each, tile n at n * 32, bank 2 at OBJX_BANK2 */
+  readonly objx = this.state.subarray(OBJX, OBJX + 0x8000);
+  /**
+   * per OAM entry (0-127, then oamExt's 128-255): bit 0 = its tiles come from bank 1, bit 2 =
+   * from bank 2, bit 1 = it has a real x (extension); set by the next full OAM DMA
+   */
+  readonly oamx = this.state.subarray(OAMX, OAMX + 0x100);
+  readonly oamxNext = this.state.subarray(OAMX_NEXT, OAMX_NEXT + 0x100);
+  /** the banks' own sprite palettes (extension): 8 x 16 colors each, as CGRAM 80-FF; bank 2 at 0x100 */
+  readonly cgramx = this.state.subarray(CGRAMX, CGRAMX + 0x200);
   /** per OAM entry, its real x (extension, `oamx` bit 1): int16 little-endian; and the next */
-  readonly oamWideX = new Int16Array(this.state.buffer, this.state.byteOffset + OAM_WIDE_X, 0x80);
-  readonly oamWideXNext = new Int16Array(this.state.buffer, this.state.byteOffset + OAM_WIDE_X_NEXT, 0x80);
+  readonly oamWideX = new Int16Array(this.state.buffer, this.state.byteOffset + OAM_WIDE_X, 0x100);
+  readonly oamWideXNext = new Int16Array(this.state.buffer, this.state.byteOffset + OAM_WIDE_X_NEXT, 0x100);
+  /** the second OAM (extension): 128 entries as the OAM (low table, then high table); and the next */
+  readonly oamExt = this.state.subarray(OAM_EXT, OAM_EXT + 0x220);
+  readonly oamExtNext = this.state.subarray(OAM_EXT_NEXT, OAM_EXT_NEXT + 0x220);
+  /** entries of oamExt shown (0 = none); and the next */
+  oamExtCount = 0;
+  oamExtCountNext = 0;
+  /** the HUD panels' tiles (extension): 64 2bpp tiles, numbered HUDX_TILE0 .. in panel entries */
+  readonly hudxTiles = this.state.subarray(HUDX_TILES, HUDX_TILES + 0x400);
+  /** the HUD panels (extension): left then right, HUDX_ROWS x HUDX_COLS BG3 map entries each */
+  readonly hudxMap = this.state.subarray(HUDX_MAP, HUDX_MAP + HUDX_MAP_BYTES);
+  /** panel rows shown (0 = none), from BG3 tile row hudxRow */
+  hudxRows = 0;
+  hudxRow = 0;
+  /** 6000-7FFF of banks 00-3F / 80-BF reach WRAM (extension; config, not state) */
+  ramExt = false;
   /** pixels shown beyond each side of the 256 (extension; 0 = the SNES picture) */
   wide = 0;
   /**
@@ -260,6 +305,7 @@ export class Machine {
     if (bank === 0x7e || bank === 0x7f) return this.wram[addr & 0x1ffff]!;
     if ((bank & 0x40) === 0) {
       if (lo < 0x2000) return this.wram[lo]!;
+      if (lo >= 0x6000 && lo < 0x8000 && this.ramExt) return this.wram[lo]!;
       if (lo < 0x8000) return this.ioRead(lo);
       return this.rom.fileU8(((bank & 0x3f) << 16) | lo);
     }
@@ -274,7 +320,7 @@ export class Machine {
     if (bank === 0x7e || bank === 0x7f) {
       this.wram[addr & 0x1ffff] = v;
       if (this.log !== null) this.log.push(addr & 0x1ffff, v);
-    } else if ((bank & 0x40) === 0 && lo < 0x2000) {
+    } else if ((bank & 0x40) === 0 && (lo < 0x2000 || (lo >= 0x6000 && lo < 0x8000 && this.ramExt))) {
       this.wram[lo] = v;
       if (this.log !== null) this.log.push(lo, v);
     } else if ((bank & 0x40) === 0 && lo < 0x8000) this.ioWrite(lo, v);
@@ -735,10 +781,11 @@ export class Machine {
         // VRAM is only writable in vertical blank or forced blank; the address still steps
         if ((this.ioreg[0]! & 0x80) !== 0 || this.vline >= 225) {
           const a = ((this.vmaddr << 1) | (lo & 1)) & 0xffff;
-          if ((this.ioreg[0x15]! & 0x40) === 0) this.vram[a] = v;
+          const vmain = this.ioreg[0x15]!;
+          if ((vmain & 0x60) === 0) this.vram[a] = v;
           else {
             const o = this.objxOffset(a);
-            if (o >= 0) this.objx[o] = v;
+            if (o >= 0) this.objx[o + (vmain & 0x40 ? 0 : OBJX_BANK2)] = v;
           }
         }
         const highStep = (this.ioreg[0x15]! & 0x80) !== 0;
@@ -881,6 +928,8 @@ export class Machine {
       if (wholeOam) {
         this.oamx.set(this.oamxNext);
         this.oamWideX.set(this.oamWideXNext);
+        this.oamExt.set(this.oamExtNext);
+        this.oamExtCount = this.oamExtCountNext;
       }
     }
   }
@@ -893,7 +942,8 @@ export class Machine {
       this.cyc, this.vline, this.hMax, this.event, this.hNext, this.refresh, this.field, this.irqAt,
       this.irqLine ? 1 : 0, this.iChange, this.waiting ? 1 : 0, this.fast, this.nmiFlag, this.hdma,
       this.hdmaEnded, this.frames, this.overclock, this.wide, this.tall,
-      this.hudTop, this.hudLift, this.hudBottom, this.hudDrop, this.rulesWord];
+      this.hudTop, this.hudLift, this.hudBottom, this.hudDrop, this.rulesWord, this.oamExtCount, this.oamExtCountNext,
+      this.hudxRows, this.hudxRow];
   }
 
   /** Size of a snapshot in bytes. */
@@ -959,6 +1009,10 @@ export class Machine {
     this.hudBottom = w(38);
     this.hudDrop = w(39);
     this.rulesWord = w(40);
+    this.oamExtCount = w(41);
+    this.oamExtCountNext = w(42);
+    this.hudxRows = w(43);
+    this.hudxRow = w(44);
     this.brk = this.irqAt;
     this.frameDone = false;
   }

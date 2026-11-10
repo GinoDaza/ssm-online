@@ -1,7 +1,7 @@
 # SSM Online
 
 **Saturday Night Slam Masters** (SNES, Capcom, 1994), playable online with friends, plus modes
-the original never had: ring-out in 2vs2, 4vs4 on a wider ring.
+the original never had: 2 vs 2 in the full arena with ring-out, 3 vs 3 and 4 vs 4.
 
 The game runs from its own code: the server holds your ROM dump, and the client translates the
 ROM's 65816 code to JavaScript as it runs. There is no emulator. The fighting is the
@@ -36,7 +36,8 @@ The server prints its addresses. Friends on the same LAN or VPN (Radmin VPN work
 - [x] 2 vs 2 in the full arena: out of the ring, on the floor, with the ringside items, count-out
 - [x] Wider screen (16:9) and full-height picture in the full arena, for 2 vs 2 and 1 vs 1
 - [x] Multitap: up to four human players, local or online
-- [x] Game Mode Select with 1 VS 1 to 4 VS 4 (3 VS 3 and 4 VS 4 play as 2 VS 2 for now)
-- [ ] 3 vs 3, 4 vs 4
+- [x] Game Mode Select with 1 VS 1 to 4 VS 4
+- [x] 3 vs 3 and 4 vs 4 in the full arena: the extra wrestlers are the CPU's, with their HUD
+      beside the original's
 
 See `docs/architecture.md` for how it works.

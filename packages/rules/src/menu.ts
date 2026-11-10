@@ -16,7 +16,8 @@
  * picture (and BG2 the same window of its backdrop, the wallpaper around them): the singles one for 1 VS 1, three windows of the team one for the rest, with the
  * game's font (BG1 tiles 100 + character - 20, palette 1) for the labels in row 18. The
  * choice (0-3) lives in Machine.rulesWord; `$1BA0` bit 6 is set for 2 VS 2 and up, so the
- * game goes on as a Team Battle Royal (3 VS 3 and 4 VS 4 play as 2 VS 2 for now). The chosen
+ * game goes on as a Team Battle Royal (3 VS 3 and 4 VS 4 add the extra wrestlers at the match
+ * start, teams.ts). The chosen
  * panel shows in colour with a red frame, the others grey: the singles panel keeps palettes
  * 2 / 3 (the list makes them right), a team panel takes palettes 4 / 5 when chosen, else
  * palette 6 (free on this screen: palette 4 made grey) with the list's grey frame. The

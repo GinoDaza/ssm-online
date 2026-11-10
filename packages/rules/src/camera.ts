@@ -38,9 +38,9 @@
  * wrestlers (singlesWideCamera, at C1B90B).
  */
 import type { Machine } from '@ssm/core';
+import { pages } from './slots.ts';
 import { PICTURE_TOP } from './wide.ts';
 
-const SLOTS = [0x0800, 0x0a00, 0x0c00, 0x0e00];
 /** the original tail: D = 0, C1BB53, RTL */
 export const CAMERA_TAIL = 0xc1202f;
 
@@ -149,7 +149,7 @@ export function teamArenaCamera(c: Machine): number {
   const rd = (a: number) => w[a]! | (w[a + 1]! << 8);
   c.tick(1500); // about the original's cost; deterministic either way
   if (rd(0x24) === 0) return CAMERA_TAIL;
-  const active = SLOTS.filter((d) => w[d + 0x76] !== 0 && (w[d]! & 0x80) !== 0);
+  const active = pages(c).filter((d) => w[d + 0x76] !== 0 && (w[d]! & 0x80) !== 0);
   frame(c, active, rd(0x2c), rd(0x30));
   return CAMERA_TAIL;
 }

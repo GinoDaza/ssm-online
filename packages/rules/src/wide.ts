@@ -27,6 +27,7 @@
  * (BG3: faces, names and bars at the top, the clock at the bottom) moves to the new edges.
  */
 import type { Machine, Runner } from '@ssm/core';
+import { oamIndex } from './oamext.ts';
 
 const CULLS = [0xc1231b, 0xc2000f, 0xc2036a, 0xc21056, 0xc21628, 0xc216ae] as const;
 const PIECE_CULL = 0xc1f92c;
@@ -101,7 +102,7 @@ export function installWide(r: Runner): void {
   r.override(PIECE_CULL, (c) => {
     if (!c.wide) return r.original(c, PIECE_CULL);
     const next = cmpWide(c, PIECE_CULL);
-    const i = c.wram[0xf4]! & 0x7f;
+    const i = oamIndex(c);
     if (!c.c) {
       c.oamWideXNext[i] = ((c.a - 0x10) << 16) >> 16;
       c.oamxNext[i]! |= 2;

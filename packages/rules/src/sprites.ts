@@ -27,7 +27,9 @@
  *   wrestlers (C18B80). The bank's palettes follow the game's (its CGRAM buffer 3100-31DF,
  *   each drawing pass), but palette 7 holds the items' colors from that list.
  */
-import type { Machine, Runner } from '@ssm/core';
+import { OBJX_BANK2, rtl, type Machine, type Runner } from '@ssm/core';
+import { oamIndex, oamPassStart } from './oamext.ts';
+import { EXT, EXTRA, bigTeams, extras, isExtra, rd16, setTeamSize } from './slots.ts';
 import { setTall } from './wide.ts';
 
 const TEAM_FLAG = 0x1ba0;
@@ -154,7 +156,12 @@ export function installSprites(r: Runner): void {
       c.oamxNext.fill(0);
       c.wide = 0; // the wide and tall picture is the arena's (wide.ts)
       setTall(c, false);
+      c.hudxRows = 0;
     }
+    // the extra wrestlers are the match's (set by its start C189BC, state 18), not the screens'
+    // after it (from 20 on, which use ext WRAM as a buffer) or before
+    const state = c.wram[0x56]!;
+    if (state < 0x14 || state >= 0x20) setTeamSize(c, 2);
     return r.original(c, 0xc00369);
   });
 
@@ -163,17 +170,115 @@ export function installSprites(r: Runner): void {
   r.split(0xc1f5a4);
   r.override(0xc1f5a2, (c) => {
     c.oamxNext.fill(0);
-    if (isTeam(c)) c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[1]), 0);
+    oamPassStart(c);
+    if (isTeam(c)) {
+      c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[1]), 0);
+      // bank 2 (the extra wrestlers): the game's palettes, 4-7 the extras' own
+      c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[0] + 0x80), BANK2_PALETTES);
+      c.cgramx.set(c.wram.subarray(EXT.PALETTES, EXT.PALETTES + 0x80), BANK2_PALETTES + 0x80);
+    }
     return r.original(c, 0xc1f5a2);
   });
   for (const drawer of [0xc1f6c7, 0xc1f74c, 0xc1f7bb]) {
     r.split(drawer + 2);
     r.override(drawer, (c) => {
       const d = c.x;
-      const bank =
-        isTeam(c) && ((d >= 0x1000 && d < 0x1200) || (d >= 0x1200 && d < 0x1a00 && SINGLES_GRAPHICS.has(c.wram[d + 1]!)));
-      c.oamxNext.fill(bank ? 1 : 0, c.wram[0xf4]! & 0x7f);
+      const bank = !isTeam(c)
+        ? 0
+        : isExtra(d)
+          ? 4 // an extra wrestler or its companion piece (+1C9)
+          : (d >= 0x1000 && d < 0x1200) || (d >= 0x1200 && d < 0x1a00 && SINGLES_GRAPHICS.has(c.wram[d + 1]!))
+            ? 1
+            : 0;
+      c.oamxNext.fill(bank, oamIndex(c));
       return r.original(c, drawer);
     });
   }
+
+  installExtraGraphics(r);
+}
+
+/** bank 2's palettes in Machine.cgramx */
+const BANK2_PALETTES = 0x100;
+/** OBJ VRAM words of the wrestler slots 0-3 (C00971: 0800 at 7A00 ... 0E00 at 6800) */
+const SLOT_VRAM = [0x7a00, 0x7400, 0x6e00, 0x6800] as const;
+
+/** Copy `size` bytes from the ROM to bank 2 at the VRAM byte address `dest`. */
+function toBank2(c: Machine, src: number, size: number, dest: number): void {
+  for (let i = 0; i < size; i++) {
+    const o = c.objxOffset((dest + i) & 0xffff);
+    if (o >= 0) c.objx[OBJX_BANK2 + o] = c.peek8((src & 0xff0000) | ((src + i) & 0xffff));
+  }
+}
+
+/**
+ * The extra wrestlers' frames (C00A2B for +50, C00AD5 for +1D9) into sprite bank 2, at the VRAM
+ * place of the base slot each mirrors. Bank 2 is not VRAM, so the copy is direct instead of
+ * DMA records: it takes no room in the DMA list (0400, A0 bytes) nor upload time.
+ */
+function extraTiles(c: Machine): void {
+  const w = c.wram;
+  const rom16 = (a: number) => c.peek8(a) | (c.peek8((a & 0xff0000) | ((a + 1) & 0xffff)) << 8);
+  EXTRA.slice(0, extras(c)).forEach((page, e) => {
+    const vram = SLOT_VRAM[e]!;
+    if (w[page + 0x50]) {
+      w[page + 0x50] = 0;
+      const f = rd16(c, page + 0x4b) & 0x1ff;
+      let p = 0xc50000 | rom16(0xc50000 | ((2 * f + rd16(c, page + 0x4e)) & 0xffff));
+      for (let k = 0; k < 32; k++) {
+        const n = c.peek8(p);
+        if (!n) break;
+        const size = (n << 4) & 0xfff;
+        const src = (c.peek8(p + 3) << 16) | rom16(p + 1);
+        const hi = (c.peek8(p + 4) + (vram >> 8)) & 0xff;
+        toBank2(c, src, size, ((hi & 0x7f) << 9) & 0xffff);
+        c.tick(8 * size);
+        if (hi & 0x80) break;
+        p = 0xc50000 | ((p + 5) & 0xffff);
+      }
+    }
+    const extra = w[page + 0x1d9]!;
+    if (extra) {
+      w[page + 0x1d9] = 0;
+      let p = 0xc50000 | rom16(0xc50000 | ((rd16(c, 0x04) + extra) & 0xffff));
+      for (let k = 0; k < 32; k++) {
+        const size = rom16(p);
+        const src = (c.peek8(p + 4) << 16) | rom16(p + 2);
+        const word = (rom16(p + 5) + vram) & 0xffff;
+        toBank2(c, src, size, (word << 1) & 0xffff);
+        c.tick(8 * size);
+        if (word & 0x8000) break;
+        p = 0xc50000 | ((p + 7) & 0xffff);
+      }
+    }
+  });
+}
+
+/**
+ * C18B7D (the palette of the wrestler at D, variant +54) for an extra slot: the colours of the
+ * base slot it mirrors (team: variant slot + 1, slot 2 takes 5), into its bank-2 palette.
+ */
+function extraPalette(c: Machine): void {
+  const w = c.wram;
+  const page = c.d;
+  const e = (page - EXTRA[0]) >> 9;
+  const v = ((e === 2 ? 4 : e) + 1 + w[page + 0x54]!) & 0xff;
+  const off = (((v << 4) & 0xff) << 1) & 0x1ff;
+  const root = w[page + 0x51]! | (w[page + 0x52]! << 8) | (w[page + 0x53]! << 16);
+  for (let i = 0; i < 32; i++) w[EXT.PALETTES + 0x20 * e + i] = c.peek8((root + off + i) & 0xffffff);
+  w[0xd5] = 1;
+}
+
+function installExtraGraphics(r: Runner): void {
+  // C009E5 SEP #$30, after the four slots of C00971 (D = 0)
+  r.override(0xc009e5, (c) => {
+    if (bigTeams(c)) extraTiles(c);
+    return r.original(c, 0xc009e5);
+  });
+  r.override(0xc18b7d, (c) => {
+    if (!bigTeams(c) || !isExtra(c.d)) return r.original(c, 0xc18b7d);
+    c.tick(500);
+    extraPalette(c);
+    return rtl(c);
+  });
 }

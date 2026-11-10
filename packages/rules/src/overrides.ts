@@ -14,6 +14,10 @@ import { installCountOut } from './countout.ts';
 import { SINGLES_CAMERA, singlesWideCamera, teamArenaCamera } from './camera.ts';
 import { installItems } from './items.ts';
 import { installMenu } from './menu.ts';
+import { installOamExt } from './oamext.ts';
+import { installReferee } from './referee.ts';
+import { chosenSize, extraChars, installTeams } from './teams.ts';
+import { installHud } from './hud.ts';
 import { installSprites } from './sprites.ts';
 import { installWide, marginOf, setTall } from './wide.ts';
 import type { Ruleset } from './ruleset.ts';
@@ -110,7 +114,8 @@ export function installRules(game: Game, rules: Ruleset): void {
     r.override(0xc02631, (c) => {
       const team = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0;
       const picture = team || rules.wideSingles;
-      c.overclock = team ? 1 : 0;
+      // six or eight wrestlers: four times the CPU
+      c.overclock = team ? (rules.modeMenu && chosenSize(c) > 2 ? 2 : 1) : 0;
       c.wide = picture ? marginOf(rules.screenWidth) : 0;
       setTall(c, picture && rules.fullHeight);
       return team ? createArenaObjects(c) : r.original(c, 0xc02631);
@@ -124,4 +129,12 @@ export function installRules(game: Game, rules: Ruleset): void {
     installWide(r);
   }
   if (rules.modeMenu) installMenu(r);
+  // 3 vs 3 and 4 vs 4 (the menu's choice), in the full arena
+  if (rules.modeMenu && rules.singlesArena) {
+    game.m.ramExt = true;
+    installTeams(r);
+    installReferee(r);
+    installOamExt(r);
+    installHud(r, extraChars);
+  }
 }
