@@ -122,6 +122,17 @@ between them. The choice is kept in `Machine.rulesWord` (a word the modes own, s
 state); 2 VS 2 and up set the team bit. Classic keeps the original screen
 (`rules/test/menu.test.ts`).
 
+**Menus in the wide picture** (`Ruleset.wideMenus`, `rules/src/menus.ts`). The screens before
+a match fill the same 400 x 224 picture. Their maps end at the SNES screen's 256 columns (past
+them is another layer's map, or nothing), so a Machine extension says what the margins show
+instead (`Machine.margins`, set once a frame outside a match): per BG layer its map as it goes
+on (the default, the matches), nothing, or a patch of the layer as it shows on the screen,
+repeated (x, width, y, height); and sprites without a real x stay inside the 256, since the
+game parks the unused ones just outside. The screen is known by the last VRAM list loaded
+(C00643): the title (list 2: the backdrop), the Game Mode Select (7: the wallpaper, a 48 x 32
+patch) and the Team Battle Royal entry (6: the lights and the crowd, 64 px wide strips). The
+other screens keep the SNES picture between black sides (`rules/test/wide-menus.test.ts`).
+
 **3 vs 3 and 4 vs 4** (the menu's 3 VS 3 / 4 VS 4 in the full arena, `rules/src/teams.ts`). A
 Team Battle Royal with one or two more wrestlers a team, run by the original team engine. The
 players pick the four wrestlers of the original selection (up to four humans); the extras are

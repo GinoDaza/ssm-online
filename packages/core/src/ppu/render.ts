@@ -17,14 +17,16 @@
  * so (Machine.wide, a mode extension) it fills the sides too: BG1 / BG2 go on through their
  * maps, BG3 (the HUD) stays in the middle 256, sprites take their real x (Machine.oamWideX),
  * windows are taken at the nearest middle column, and the 32-sprite / 34-tile line limits are
- * lifted (more of the line is on screen). Otherwise the sides are black.
+ * lifted (more of the line is on screen). Otherwise the sides are black. A screen whose maps
+ * do not go on can have its margins say otherwise per layer (Machine.margins): nothing, or a
+ * patch of the layer repeated; and sprites without a real x can be kept inside the 256.
  *
  * And taller: while Machine.tall is set, the forced-blank lines above the first drawn line are
  * drawn with that line's state, and the lines from Machine.tall down with the state of the line
  * before it (after it the game is already uploading the next frame). The HUD (BG3) bands at
  * the top and bottom move to the new edges (Machine.hudTop / hudLift / hudBottom / hudDrop).
  */
-import { HUDX_COLS, HUDX_ROWS, HUDX_TILE0, type Machine, OBJX_BANK2, PpuReg } from '../cpu/machine.ts';
+import { HUDX_COLS, HUDX_ROWS, HUDX_TILE0, MARGIN_SPRITES, MARGIN_WORDS, Margin, type Machine, OBJX_BANK2, PpuReg } from '../cpu/machine.ts';
 
 export const WIDTH = 256;
 export const HEIGHT = 224;
@@ -295,17 +297,6 @@ export class Renderer {
 
   private background(y: number, n: number, bpp: number, hiDepth: number, loDepth: number, middle = false): void {
     const m = this.m;
-    const io = m.ioreg;
-    const vram = m.vram;
-    const sc = io[0x07 + n]!;
-    const mapBase = (sc & 0xfc) << 9;
-    const wide = (sc & 1) !== 0;
-    const tall = (sc & 2) !== 0;
-    const charBase = ((n < 2 ? io[0x0b]! >> (4 * n) : io[0x0c]! >> (4 * (n - 2))) & 15) << 13;
-    const big = (io[0x05]! & (0x10 << n)) !== 0;
-    const ts = big ? 16 : 8;
-    const shift = big ? 4 : 3;
-    const hofs = m.ppu[PpuReg.HOFS + n]! & 0x3ff;
     const vofs = m.ppu[PpuReg.VOFS + n]! & 0x3ff;
     let line = y;
     if (middle && m.tall !== 0) {
@@ -318,17 +309,68 @@ export class Renderer {
       }
     }
     const Y = (line + vofs + 1) & 0x3ff;
+    const mid = -this.origin;
+    if (middle) this.bgRun(n, bpp, hiDepth, loDepth, mid, mid + WIDTH, 0, Y);
+    else {
+      const mode = n < 3 ? m.margins[MARGIN_WORDS * n]! : Margin.MAP;
+      if (mode === Margin.MAP || this.x0 >= mid) this.bgRun(n, bpp, hiDepth, loDepth, this.x0, this.x1, 0, Y);
+      else {
+        this.bgRun(n, bpp, hiDepth, loDepth, mid, mid + WIDTH, 0, Y);
+        if (mode === Margin.REPEAT) {
+          // the patch (px, py, pw x ph) repeated: a margin pixel shows the patch's pixel
+          // px + (x - px) mod pw, py + (y - py) mod ph
+          const k = MARGIN_WORDS * n;
+          const px = m.margins[k + 1]!;
+          const pw = Math.max(1, m.margins[k + 2]!);
+          const py = m.margins[k + 3]!;
+          const ph = Math.max(1, m.margins[k + 4]!);
+          const sy = py + ((((y - py) % ph) + ph) % ph);
+          const SY = (sy + vofs + 1) & 0x3ff;
+          for (const [from, to] of [[this.x0, mid], [mid + WIDTH, this.x1]] as const) {
+            for (let x = from; x < to; ) {
+              const gx = x - mid;
+              const off = (((gx - px) % pw) + pw) % pw;
+              const end = Math.min(to, x + pw - off);
+              this.bgRun(n, bpp, hiDepth, loDepth, x, end, px + off - gx, SY);
+              x = end;
+            }
+          }
+        }
+      }
+    }
+    if (middle && m.hudxRows) {
+      const io = m.ioreg;
+      const big = (io[0x05]! & (0x10 << n)) !== 0;
+      const charBase = ((n < 2 ? io[0x0b]! >> (4 * n) : io[0x0c]! >> (4 * (n - 2))) & 15) << 13;
+      this.hudPanels((Y >> (big ? 4 : 3)) & 63, Y & (big ? 15 : 7), charBase, hiDepth, loDepth);
+    }
+  }
+
+  /**
+   * Layer n's pixels from x = from to before `to`, each showing the layer at screen column
+   * x + dx (with the scroll) and at map line Y.
+   */
+  private bgRun(n: number, bpp: number, hiDepth: number, loDepth: number, from: number, to: number, dx: number, Y: number): void {
+    const m = this.m;
+    const io = m.ioreg;
+    const vram = m.vram;
+    const sc = io[0x07 + n]!;
+    const mapBase = (sc & 0xfc) << 9;
+    const wide = (sc & 1) !== 0;
+    const tall = (sc & 2) !== 0;
+    const charBase = ((n < 2 ? io[0x0b]! >> (4 * n) : io[0x0c]! >> (4 * (n - 2))) & 15) << 13;
+    const big = (io[0x05]! & (0x10 << n)) !== 0;
+    const ts = big ? 16 : 8;
+    const shift = big ? 4 : 3;
+    const hofs = m.ppu[PpuReg.HOFS + n]! & 0x3ff;
     const ty = (Y >> shift) & 63;
     const tileBytes = 8 * bpp;
-    const from = middle ? -this.origin : this.x0;
-    const to = middle ? -this.origin + WIDTH : this.x1;
     const rowY = Y & (ts - 1);
-    const W = this.width;
     const modes = this.modes;
-    const base = n * W;
+    const base = n * this.width;
     // one 8-pixel tile row at a time: its map entry, its 2 or 4 bitplanes
     for (let x = from; x < to; ) {
-      const X = (x + this.origin + hofs) & 0x3ff;
+      const X = (x + this.origin + dx + hofs) & 0x3ff;
       const tx = (X >> shift) & 63;
       let screen = 0;
       if (wide && tx >= 32) screen += 0x400;
@@ -360,7 +402,6 @@ export class Renderer {
         this.depth[x] = d;
       }
     }
-    if (middle && m.hudxRows) this.hudPanels(ty, rowY, charBase, hiDepth, loDepth);
   }
 
   /** The HUD panels (Machine.hudx) in the margins, on BG3 tile row `ty`, pixel row `rowY`. */
@@ -422,6 +463,8 @@ export class Renderer {
     const maxCount = wide ? 256 : 32;
     let count = 0;
     let tiles = wide ? 1 << 20 : 34;
+    // the margins keep sprites without a real x out (Machine.margins)
+    const clip = wide && (m.margins[MARGIN_SPRITES]! & 1) !== 0;
     // entries 128 and up are the second OAM's (Machine.oamExt), drawn below the OAM's
     const tableOf = (s: number) => (s < 128 ? oam : m.oamExt);
     const hposOf = (s: number) => {
@@ -482,6 +525,7 @@ export class Renderer {
       let X = hpos === -256 && !wide ? 256 : hpos;
       let t = tiles;
       const end = wide ? right : 256;
+      const inside = clip && !(m.oamx[s]! & 2);
       for (; X <= end && X < hpos + w; tileX = (tileX + inc) & 0x0f, X += 8) {
         if (X < left - 7 || --t < 0 || X === end) continue;
         const tile = rowTile | tileX;
@@ -501,7 +545,7 @@ export class Renderer {
         }
         for (let px = 0; px < 8; px++) {
           const gx = X + px;
-          if (gx < left || gx >= right) continue;
+          if (gx < left || gx >= right || (inside && (gx < 0 || gx >= WIDTH))) continue;
           const sx = gx - this.origin;
           if (this.objColor[sx] !== 0) continue;
           const bit = hflip ? px : 7 - px;

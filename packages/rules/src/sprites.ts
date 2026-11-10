@@ -134,7 +134,8 @@ function arenaPresent(c: Machine): boolean {
   return false;
 }
 
-export function installSprites(r: Runner): void {
+/** `menus`: once a frame outside a match, after the match picture is cleared (menus.ts) */
+export function installSprites(r: Runner, menus?: (c: Machine) => void): void {
   // C01FE3 follows the arena list load (C01FE0 JSR C00643) in C01FB8
   r.split(0xc01fe6);
   r.override(0xc01fe3, (c) => {
@@ -157,6 +158,7 @@ export function installSprites(r: Runner): void {
       c.wide = 0; // the wide and tall picture is the arena's (wide.ts)
       setTall(c, false);
       c.hudxRows = 0;
+      menus?.(c);
     }
     // the extra wrestlers are the match's (set by its start C189BC, state 18), not the screens'
     // after it (from 20 on, which use ext WRAM as a buffer) or before

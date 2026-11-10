@@ -31,4 +31,9 @@ export interface Ruleset {
    * TEAM BATTLE ROYAL.
    */
   readonly modeMenu: boolean;
+  /**
+   * The menus fill the same wide picture as the matches (menus.ts). Original: false, the SNES
+   * picture between black sides.
+   */
+  readonly wideMenus: boolean;
 }

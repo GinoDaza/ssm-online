@@ -14,6 +14,7 @@ import { installCountOut } from './countout.ts';
 import { SINGLES_CAMERA, singlesWideCamera, teamArenaCamera } from './camera.ts';
 import { installItems } from './items.ts';
 import { installMenu } from './menu.ts';
+import { installMenus, menuPicture } from './menus.ts';
 import { installOamExt } from './oamext.ts';
 import { installReferee } from './referee.ts';
 import { chosenSize, extraChars, installTeams } from './teams.ts';
@@ -117,6 +118,7 @@ export function installRules(game: Game, rules: Ruleset): void {
       // six or eight wrestlers: four times the CPU
       c.overclock = team ? (rules.modeMenu && chosenSize(c) > 2 ? 2 : 1) : 0;
       c.wide = picture ? marginOf(rules.screenWidth) : 0;
+      c.margins.fill(0); // the arena's maps go on (menus.ts)
       setTall(c, picture && rules.fullHeight);
       return team ? createArenaObjects(c) : r.original(c, 0xc02631);
     });
@@ -124,7 +126,9 @@ export function installRules(game: Game, rules: Ruleset): void {
     // the singles camera: the original unless the picture is wide (wideSingles)
     r.override(SINGLES_CAMERA, (c) => (c.wide ? singlesWideCamera(c) : r.original(c, SINGLES_CAMERA)));
     installItems(r);
-    installSprites(r);
+    const margin = marginOf(rules.screenWidth);
+    installSprites(r, rules.wideMenus ? (c) => menuPicture(c, margin) : undefined);
+    if (rules.wideMenus) installMenus(r);
     installCountOut(r);
     installWide(r);
   }

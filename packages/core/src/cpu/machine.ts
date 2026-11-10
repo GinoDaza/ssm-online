@@ -31,6 +31,11 @@
  * BG3 tile rows `hudxRow` .. + hudxRows, moved as the HUD is. Panel entries are BG3 map
  * entries; tiles 3C0-3FF come from the panels' own 64 tiles (`hudxTiles`, 2 bpp).
  *
+ * And what the margins of a wide picture show (`margins`), for screens whose maps do not go
+ * on beyond the 256 columns: per BG layer, its map as it is (the default), nothing, or a
+ * repeated patch of the layer as it shows on the screen (`Margin`); and whether sprites
+ * without a real x stay inside the 256 columns.
+ *
  * And more work RAM: with `ramExt` (set by a mode before the game runs), 6000-7FFF of banks
  * 00-3F / 80-BF (unmapped on this cartridge) reach WRAM 7E:6000-7FFF, which the game never
  * uses, so direct-page code can run on objects there.
@@ -63,13 +68,29 @@ const OAM_WIDE_X_NEXT = OAM_WIDE_X + 0x200;
 const OAM_EXT = OAM_WIDE_X_NEXT + 0x200;
 const OAM_EXT_NEXT = OAM_EXT + 0x220;
 /** HUD panels (extension): rows and columns of each, and the first tile of the panels' own */
-export const HUDX_ROWS = 8;
+export const HUDX_ROWS = 28;
 export const HUDX_COLS = 9;
 export const HUDX_TILE0 = 0x3c0;
 const HUDX_MAP_BYTES = 2 * HUDX_ROWS * HUDX_COLS * 2;
 const HUDX_TILES = OAM_EXT_NEXT + 0x220;
 const HUDX_MAP = HUDX_TILES + 0x400;
-const APU = HUDX_MAP + HUDX_MAP_BYTES;
+const MARGINS = HUDX_MAP + HUDX_MAP_BYTES;
+const APU = MARGINS + 2 * 16;
+/**
+ * What the wide picture's margins show (Machine.margins): per BG layer (BG1-BG3, `MARGIN_WORDS`
+ * words each) its mode, then the source patch; the last word is the sprite flags.
+ */
+export const Margin = {
+  /** the layer's map goes on (the default) */
+  MAP: 0,
+  /** the layer is not drawn in the margins */
+  OFF: 1,
+  /** the margins repeat a patch of the layer as it shows on the SNES screen */
+  REPEAT: 2,
+} as const;
+export const MARGIN_WORDS = 5;
+/** Machine.margins[MARGIN_SPRITES] bit 0: sprites without a real x stay on the SNES screen */
+export const MARGIN_SPRITES = 15;
 /** the second sprite bank in objx */
 export const OBJX_BANK2 = 0x4000;
 /** the WRAM that ramExt maps into banks 00-3F / 80-BF */
@@ -135,6 +156,12 @@ export class Machine {
   /** panel rows shown (0 = none), from BG3 tile row hudxRow */
   hudxRows = 0;
   hudxRow = 0;
+  /**
+   * The margins (extension, `Margin`): for BG layer n, words 5n .. 5n + 4 are its mode and the
+   * patch a REPEAT layer shows: x, width, y, height in screen pixels (x 0-255, y 0-223, the
+   * patch inside the screen); word MARGIN_SPRITES holds the sprite flags. All 0: the default.
+   */
+  readonly margins = new Int16Array(this.state.buffer, this.state.byteOffset + MARGINS, 16);
   /** 6000-7FFF of banks 00-3F / 80-BF reach WRAM (extension; config, not state) */
   ramExt = false;
   /** pixels shown beyond each side of the 256 (extension; 0 = the SNES picture) */
