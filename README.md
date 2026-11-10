@@ -36,6 +36,7 @@ The server prints its addresses. Friends on the same LAN or VPN (Radmin VPN work
 - [x] 2 vs 2 in the full arena: out of the ring, on the floor, with the ringside items, count-out
 - [x] Wider screen (16:9) and full-height picture in the full arena, for 2 vs 2 and 1 vs 1
 - [x] Multitap: up to four human players, local or online
-- [ ] 4 vs 4
+- [x] Game Mode Select with 1 VS 1 to 4 VS 4 (3 VS 3 and 4 VS 4 play as 2 VS 2 for now)
+- [ ] 3 vs 3, 4 vs 4
 
 See `docs/architecture.md` for how it works.

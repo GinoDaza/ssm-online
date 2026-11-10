@@ -13,6 +13,7 @@ import { createArenaObjects } from './arena.ts';
 import { installCountOut } from './countout.ts';
 import { SINGLES_CAMERA, singlesWideCamera, teamArenaCamera } from './camera.ts';
 import { installItems } from './items.ts';
+import { installMenu } from './menu.ts';
 import { installSprites } from './sprites.ts';
 import { installWide, marginOf, setTall } from './wide.ts';
 import type { Ruleset } from './ruleset.ts';
@@ -122,4 +123,5 @@ export function installRules(game: Game, rules: Ruleset): void {
     installCountOut(r);
     installWide(r);
   }
+  if (rules.modeMenu) installMenu(r);
 }

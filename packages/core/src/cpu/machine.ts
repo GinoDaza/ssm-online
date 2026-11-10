@@ -107,6 +107,11 @@ export class Machine {
   hudLift = 0;
   hudBottom = 0;
   hudDrop = 0;
+  /**
+   * A word the game modes own (extension): saved and restored with the state, never read by
+   * the core. (packages/rules: the Game Mode Select's choice.)
+   */
+  rulesWord = 0;
   /** the sound unit (SPC700 + DSP), its state in the same buffer */
   readonly apu = new Apu(this.state.subarray(APU, STATE_SIZE));
   readonly rom: RomImage;
@@ -888,7 +893,7 @@ export class Machine {
       this.cyc, this.vline, this.hMax, this.event, this.hNext, this.refresh, this.field, this.irqAt,
       this.irqLine ? 1 : 0, this.iChange, this.waiting ? 1 : 0, this.fast, this.nmiFlag, this.hdma,
       this.hdmaEnded, this.frames, this.overclock, this.wide, this.tall,
-      this.hudTop, this.hudLift, this.hudBottom, this.hudDrop];
+      this.hudTop, this.hudLift, this.hudBottom, this.hudDrop, this.rulesWord];
   }
 
   /** Size of a snapshot in bytes. */
@@ -953,6 +958,7 @@ export class Machine {
     this.hudLift = w(37);
     this.hudBottom = w(38);
     this.hudDrop = w(39);
+    this.rulesWord = w(40);
     this.brk = this.irqAt;
     this.frameDone = false;
   }

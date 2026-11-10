@@ -28,4 +28,9 @@ export interface Ruleset {
    * fullHeight) and its camera (camera.ts). Original: false, the SNES picture.
    */
   readonly wideSingles: boolean;
+  /**
+   * The Game Mode Select offers 1 VS 1 to 4 VS 4 (menu.ts). Original: false, SINGLE MATCH or
+   * TEAM BATTLE ROYAL.
+   */
+  readonly modeMenu: boolean;
 }

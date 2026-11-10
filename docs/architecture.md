@@ -114,6 +114,14 @@ unchanged (checked to the clock against the emulator). Besides the sites:
 - Not in team play, so not in this mode: the referee himself (singles uses object 0C00, a
   wrestler in team play).
 
+**Game Mode Select with 1 VS 1 to 4 VS 4** (`Ruleset.modeMenu`, `rules/src/menu.ts`). The
+original screen has two panels (SINGLE MATCH, TEAM BATTLE ROYAL) in BG1 with their backdrops in
+BG2; this mode rebuilds them as four narrower panels (a 5 x 10 tile window of the singles
+picture, three of the team one) with labels in the game's own font, and left / right move
+between them. The choice is kept in `Machine.rulesWord` (a word the modes own, saved with the
+state); 2 VS 2 and up set the team bit, so 3 VS 3 and 4 VS 4 play as 2 VS 2 for now. Classic
+keeps the original screen (`rules/test/menu.test.ts`).
+
 `rules/test/team-arena.test.ts` drives player 1 with a bot (`test/bot.ts`: goals checked
 against WRAM) through a Team Battle Royal reached from power-on: classic keeps the ropes shut,
 the full arena lets him out and back in with the camera on the floor, the items run, and a

@@ -9,4 +9,5 @@ export const classicRules: Ruleset = {
   screenWidth: 256,
   fullHeight: false,
   wideSingles: false,
+  modeMenu: false,
 };
