@@ -30,6 +30,9 @@ Bugs that are understood but not fixed yet, with their cause and the planned fix
   pin-count marks C21F84 read them); a third pin waits until one is free.
 - **A give-up does not show the given-up wrestler's name** (the hold queue's display, C10EAF /
   C008D6, is left out of the ported referee).
+- **5P-8P cannot join yet**: the team entry shows their boxes (PRESS START), but the console
+  has four pads (the multitap's), so the extras stay the CPU's. Next: pads 5-8 for the online
+  players, and the extras' `+77` pad numbers.
 - **No off-screen arrows for the extras**: the arena creates one arrow object (4A) per base
   wrestler.
 

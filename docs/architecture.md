@@ -132,6 +132,11 @@ game parks the unused ones just outside. The screen is known by the last VRAM li
 (C00643): the title (list 2: the backdrop), the Game Mode Select (7: the wallpaper, a 48 x 32
 patch) and the Team Battle Royal entry (6: the lights and the crowd, 64 px wide strips). The
 other screens keep the SNES picture between black sides (`rules/test/wide-menus.test.ts`).
+The entry of a 3 VS 3 / 4 VS 4 also shows the extra players' boxes (5P and 6P beside the four
+original ones, 7P and 8P above them) in the HUD panels of the margins, now as tall as the
+screen and with eight palettes of their own (`Machine.hudxPalettes`, a margins flag) so the
+new players get their own colours; a box's inside is that of an original box still waiting
+for its player.
 
 **3 vs 3 and 4 vs 4** (the menu's 3 VS 3 / 4 VS 4 in the full arena, `rules/src/teams.ts`). A
 Team Battle Royal with one or two more wrestlers a team, run by the original team engine. The

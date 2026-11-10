@@ -29,7 +29,8 @@
  * And HUD panels beside the SNES screen (`hudx`): with `hudxRows` set, the renderer draws a
  * left and a right panel of BG3 tiles in the wide picture's margins (9 columns each), on the
  * BG3 tile rows `hudxRow` .. + hudxRows, moved as the HUD is. Panel entries are BG3 map
- * entries; tiles 3C0-3FF come from the panels' own 64 tiles (`hudxTiles`, 2 bpp).
+ * entries; tiles 3C0-3FF come from the panels' own 64 tiles (`hudxTiles`, 2 bpp), and the
+ * colours from CGRAM or (margins flag) from the panels' own eight palettes (`hudxPalettes`).
  *
  * And what the margins of a wide picture show (`margins`), for screens whose maps do not go
  * on beyond the 256 columns: per BG layer, its map as it is (the default), nothing, or a
@@ -74,7 +75,8 @@ export const HUDX_TILE0 = 0x3c0;
 const HUDX_MAP_BYTES = 2 * HUDX_ROWS * HUDX_COLS * 2;
 const HUDX_TILES = OAM_EXT_NEXT + 0x220;
 const HUDX_MAP = HUDX_TILES + 0x400;
-const MARGINS = HUDX_MAP + HUDX_MAP_BYTES;
+const HUDX_PALETTES = HUDX_MAP + HUDX_MAP_BYTES;
+const MARGINS = HUDX_PALETTES + 0x40;
 const APU = MARGINS + 2 * 16;
 /**
  * What the wide picture's margins show (Machine.margins): per BG layer (BG1-BG3, `MARGIN_WORDS`
@@ -89,7 +91,10 @@ export const Margin = {
   REPEAT: 2,
 } as const;
 export const MARGIN_WORDS = 5;
-/** Machine.margins[MARGIN_SPRITES] bit 0: sprites without a real x stay on the SNES screen */
+/**
+ * Machine.margins[MARGIN_SPRITES] bit 0: sprites without a real x stay on the SNES screen;
+ * bit 1: the HUD panels take their colours from their own palettes (`hudxPalettes`)
+ */
 export const MARGIN_SPRITES = 15;
 /** the second sprite bank in objx */
 export const OBJX_BANK2 = 0x4000;
@@ -153,6 +158,8 @@ export class Machine {
   readonly hudxTiles = this.state.subarray(HUDX_TILES, HUDX_TILES + 0x400);
   /** the HUD panels (extension): left then right, HUDX_ROWS x HUDX_COLS BG3 map entries each */
   readonly hudxMap = this.state.subarray(HUDX_MAP, HUDX_MAP + HUDX_MAP_BYTES);
+  /** the HUD panels' own palettes (extension): 8 x 4 BGR555 colours, as BG3's in CGRAM */
+  readonly hudxPalettes = this.state.subarray(HUDX_PALETTES, HUDX_PALETTES + 0x40);
   /** panel rows shown (0 = none), from BG3 tile row hudxRow */
   hudxRows = 0;
   hudxRow = 0;

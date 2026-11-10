@@ -37,7 +37,8 @@ The server prints its addresses. Friends on the same LAN or VPN (Radmin VPN work
 - [x] Wider screen (16:9) and full-height picture in the full arena, for 2 vs 2 and 1 vs 1
 - [x] Multitap: up to four human players, local or online
 - [x] Game Mode Select with 1 VS 1 to 4 VS 4
-- [ ] Menus in the wide picture: the title, the Game Mode Select and the team entry so far
+- [ ] Menus in the wide picture: the title, the Game Mode Select and the team entry (with the
+      boxes of 5P-8P) so far
 - [x] 3 vs 3 and 4 vs 4 in the full arena: the extra wrestlers are the CPU's, with their HUD
       beside the original's
 

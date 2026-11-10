@@ -105,10 +105,13 @@ export class Renderer {
   readonly width: number;
   /** the frame, RGB565 (the oracle's pixel format), row by row */
   readonly pixels: Uint16Array;
-  /** CGRAM colors, then the extra sprite banks' palettes (Machine.cgramx) at 256-383 and 384-511 */
-  private readonly pal = new Uint16Array(512);
+  /**
+   * CGRAM colors, then the extra sprite banks' palettes (Machine.cgramx) at 256-383 and 384-511,
+   * then the HUD panels' own (Machine.hudxPalettes) at 512-543
+   */
+  private readonly pal = new Uint16Array(512 + 32);
   /** the raw colors pal was made from, and the brightness (-1: none yet) */
-  private readonly palRaw = new Int32Array(512).fill(-1);
+  private readonly palRaw = new Int32Array(512 + 32).fill(-1);
   private palBrightness = -1;
   /** the registers and columns the window modes were last made for */
   private readonly windowKey = new Int32Array(12).fill(-1);
@@ -226,9 +229,9 @@ export class Renderer {
     const raw = this.palRaw;
     const all = brightness !== this.palBrightness;
     this.palBrightness = brightness;
-    for (let i = 0; i < 512; i++) {
-      const src = i < 256 ? m.cgram : m.cgramx;
-      const j = i < 256 ? 2 * i : 2 * (i - 256);
+    for (let i = 0; i < 544; i++) {
+      const src = i < 256 ? m.cgram : i < 512 ? m.cgramx : m.hudxPalettes;
+      const j = i < 256 ? 2 * i : i < 512 ? 2 * (i - 256) : 2 * (i - 512);
       const c = src[j]! | (src[j + 1]! << 8);
       if (!all && raw[i] === c) continue;
       raw[i] = c;
@@ -412,6 +415,7 @@ export class Renderer {
     const modes = this.modes;
     const base = 2 * this.width;
     const left = -this.origin - 8 * HUDX_COLS;
+    const own = m.margins[MARGIN_SPRITES]! & 2 ? 512 : 0; // the panels' own palettes
     const right = -this.origin + WIDTH;
     for (let panel = 0; panel < 2; panel++) {
       const x0 = panel === 0 ? left : right;
@@ -432,7 +436,7 @@ export class Renderer {
           p1 = m.vram[t + 1]!;
         }
         const hflip = (e & 0x4000) !== 0;
-        const palBase = ((e >> 10) & 7) * 4;
+        const palBase = own + ((e >> 10) & 7) * 4;
         const d = e & 0x2000 ? hiDepth : loDepth;
         for (let k = 0; k < 8; k++) {
           const x = x0 + 8 * col + k;
