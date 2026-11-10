@@ -128,6 +128,14 @@ export function installRules(game: Game, rules: Ruleset): void {
     r.override(0xc11f71, teamArenaCamera);
     // the singles camera: the original unless the picture is wide (wideSingles)
     r.override(SINGLES_CAMERA, (c) => (c.wide ? singlesWideCamera(c) : r.original(c, SINGLES_CAMERA)));
+    // the HUD jobs C05E1D: with more than two pads (`$7A`, the multitap) singles give objects
+    // 2-3 a label job (8: PRESS / START for a challenger on pads 3-4) at the bottom of the
+    // screen; the wide picture leaves them out (the top HUD already shows PRESS / START)
+    if (rules.wideSingles)
+      r.override(0xc05e3d, (c) => {
+        if (!(c.wram[TEAM_FLAG]! & TEAM_BIT)) c.wram[0x0df0] = c.wram[0x0ff0] = 0;
+        return r.original(c, 0xc05e3d);
+      });
     installItems(r);
     const margin = marginOf(rules.screenWidth);
     // once a frame outside a match: players 5-8 (3 vs 3 / 4 vs 4), the menus' picture

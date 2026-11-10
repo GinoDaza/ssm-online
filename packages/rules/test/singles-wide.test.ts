@@ -13,9 +13,10 @@ import { w16 } from './team-match.ts';
 const SCRIPT = 'wait*654 start*4 wait*60 start*4 wait*220 y*4 wait*120 y*4';
 const FIGHT = 2900;
 
-function singles(rules: Ruleset): Game {
+function singles(rules: Ruleset, multitap = false): Game {
   const g = new Game(loadRom());
   installRules(g, rules);
+  g.m.multitap = multitap;
   g.powerOn();
   const st = SCRIPT.split(' ').flatMap((t) => {
     const [s, n] = t.split('*');
@@ -87,6 +88,27 @@ describe.skipIf(!haveRom())('singles in the full arena: the wide picture', () =>
       checked++;
     }
     expect(checked, 'frames with the left rope shaking alone').toBeGreaterThan(0);
+  }, 120_000);
+
+  it('with the multitap: no PRESS / START labels at the bottom in the full arena, classic keeps them', () => {
+    // BG3 rows 25-26 (map at word 4C00) beside the clock, after a whole blink cycle
+    const bottom = (g: Game) => {
+      const out = new Set<number>();
+      for (let f = 0; f < 120; f++) {
+        g.step([0, 0, 0, 0]);
+        for (const row of [25, 26])
+          for (let col = 0; col < 32; col++) {
+            if (col >= 14 && col < 18) continue; // the clock
+            const a = (0x4c00 + 32 * row + col) * 2;
+            out.add((g.m.vram[a]! | (g.m.vram[a + 1]! << 8)) & 0x3ff);
+          }
+      }
+      return [...out].filter((t) => t !== 0x20); // blank
+    };
+    const g = singles(teamArenaRules, true);
+    expect(g.m.wram[0x7a], 'more than two pads').not.toBe(0);
+    expect(bottom(g)).toEqual([]);
+    expect(bottom(singles(classicRules, true)).length).toBeGreaterThan(0);
   }, 120_000);
 
   it('classic: the SNES picture', () => {

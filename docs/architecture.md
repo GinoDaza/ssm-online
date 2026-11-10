@@ -116,7 +116,10 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   and the same camera: C1B90B (`camera.ts` singlesWideCamera) frames the two wrestlers with the
   team rule above instead of the singles one (the pushing wrestler at the SNES screen's margins
   10 / F0, the snap to an arena side), then runs the original tail C1BB43 (shake, smoothing).
-  Everything else in a singles match is the original (`rules/test/singles-wide.test.ts`).
+  With the multitap (more than two pads, `$7A`) the original shows PRESS / START at the bottom
+  for a challenger on pads 3-4 (HUD jobs of objects 2-3, C05E1D); this mode leaves them out,
+  the top HUD already shows them. Everything else in a singles match is the original
+  (`rules/test/singles-wide.test.ts`).
 - Not in team play, so not in this mode: the referee himself (singles uses object 0C00, a
   wrestler in team play).
 
