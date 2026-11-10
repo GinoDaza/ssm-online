@@ -13,10 +13,10 @@ import { teamMatch, w16 } from './team-match.ts';
 describe.skipIf(!haveRom())('team matches in the singles arena: play', () => {
   const fight = teamMatch([0]);
 
-  it.skipIf(!hasFixture('match1-2830-trace'))('a singles match is still the original, to the clock', () => {
+  it.skipIf(!hasFixture('match1-2830-trace'))('a singles match is still the original, to the clock (but the picture)', () => {
     const fx = loadFixture('match1-2830-trace');
     const g = new Game(loadRom());
-    installRules(g, teamArenaRules);
+    installRules(g, { ...teamArenaRules, wideSingles: false });
     g.seed(fx.record(0), fx.cpu(0)!, fx.apu);
     const bad: string[] = [];
     for (let f = 0; f < fx.frames && bad.length < 3; f++) {

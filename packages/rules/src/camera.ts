@@ -33,6 +33,9 @@
  * original's top line did.
  *
  * Then the original tail (C1202F: D = 0, smoothing C1BB53).
+ *
+ * Singles with a wide picture (Ruleset.wideSingles) use the same framing over their two
+ * wrestlers (singlesWideCamera, at C1B90B).
  */
 import type { Machine } from '@ssm/core';
 import { PICTURE_TOP } from './wide.ts';
@@ -82,17 +85,14 @@ function tallY(c: Machine, active: number[], target: number): number {
   return y;
 }
 
-export function teamArenaCamera(c: Machine): number {
+/** Frame the wrestlers at `active` (world x from minX to maxX): sets the targets $1A8A / $1A8D. */
+function frame(c: Machine, active: number[], minX: number, maxX: number): void {
   const w = c.wram;
   const rd = (a: number) => w[a]! | (w[a + 1]! << 8);
   const wr = (a: number, v: number) => {
     w[a] = v & 0xff;
     w[a + 1] = (v >> 8) & 0xff;
   };
-  c.tick(1500); // about the original's cost; deterministic either way
-  if (rd(0x24) === 0) return CAMERA_TAIL;
-
-  const active = SLOTS.filter((d) => w[d + 0x76] !== 0 && (w[d]! & 0x80) !== 0);
   let side = 0;
   for (const d of active) side |= rd(d + 0x6f);
   wr(0x1a8f, side);
@@ -101,10 +101,10 @@ export function teamArenaCamera(c: Machine): number {
   // x
   const m = c.wide;
   let cam = rd(0x1a8a);
-  let left = s16(rd(0x2c) - cam);
+  let left = s16(minX - cam);
   if (left < -m) left = 0x10 - m;
   left = (left - (0x30 - m)) & 0xffff;
-  let right = s16(rd(0x30) - cam);
+  let right = s16(maxX - cam);
   if (right >= 0xf0 + m) right = 0xf0 + m;
   right = (right - (0xd0 + m)) & 0xffff;
   const dx = pull(left, right);
@@ -142,5 +142,32 @@ export function teamArenaCamera(c: Machine): number {
   if (y < top) y = top;
   else if (y > 0xc0) y = 0xc0;
   wr(0x1a8d, y);
+}
+
+export function teamArenaCamera(c: Machine): number {
+  const w = c.wram;
+  const rd = (a: number) => w[a]! | (w[a + 1]! << 8);
+  c.tick(1500); // about the original's cost; deterministic either way
+  if (rd(0x24) === 0) return CAMERA_TAIL;
+  const active = SLOTS.filter((d) => w[d + 0x76] !== 0 && (w[d]! & 0x80) !== 0);
+  frame(c, active, rd(0x2c), rd(0x30));
   return CAMERA_TAIL;
+}
+
+/** The singles camera C1B90B (JSR from C11588, D = 0); its tail C1BB43: shake, smoothing, RTS. */
+export const SINGLES_CAMERA = 0xc1b90b;
+const SINGLES_TAIL = 0xc1bb43;
+
+/**
+ * The singles camera with a wide picture: the team framing of `frame` over the two wrestlers,
+ * as 2 vs 2 in this mode, instead of C1B90B's (the pushing wrestler's residual at the SNES
+ * screen margins 10 / F0, and the snap to an arena side), which would keep a 256 px framing.
+ */
+export function singlesWideCamera(c: Machine): number {
+  const w = c.wram;
+  const x0 = w[0x813]! | (w[0x814]! << 8);
+  const x1 = w[0xa13]! | (w[0xa14]! << 8);
+  c.tick(1000);
+  frame(c, [0x0800, 0x0a00], Math.min(x0, x1), Math.max(x0, x1));
+  return SINGLES_TAIL;
 }

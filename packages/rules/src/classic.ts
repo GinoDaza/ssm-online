@@ -8,4 +8,5 @@ export const classicRules: Ruleset = {
   singlesArena: false,
   screenWidth: 256,
   fullHeight: false,
+  wideSingles: false,
 };

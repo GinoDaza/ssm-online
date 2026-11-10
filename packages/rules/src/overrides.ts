@@ -11,7 +11,7 @@
 import type { Game, Machine, Runner } from '@ssm/core';
 import { createArenaObjects } from './arena.ts';
 import { installCountOut } from './countout.ts';
-import { teamArenaCamera } from './camera.ts';
+import { SINGLES_CAMERA, singlesWideCamera, teamArenaCamera } from './camera.ts';
 import { installItems } from './items.ts';
 import { installSprites } from './sprites.ts';
 import { installWide, marginOf, setTall } from './wide.ts';
@@ -104,15 +104,19 @@ export function installRules(game: Game, rules: Ruleset): void {
   if (rules.singlesArena) {
     for (const site of ARENA_SITES) hideTeam(r, site);
     // the match start: team matches get the singles arena objects, and twice the CPU (four
-    // wrestlers in the singles arena overrun the SNES frame, the game slows down)
+    // wrestlers in the singles arena overrun the SNES frame, the game slows down); team
+    // matches, and singles with wideSingles, get the wide and tall picture
     r.override(0xc02631, (c) => {
       const team = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0;
+      const picture = team || rules.wideSingles;
       c.overclock = team ? 1 : 0;
-      c.wide = team ? marginOf(rules.screenWidth) : 0;
-      setTall(c, team && rules.fullHeight);
+      c.wide = picture ? marginOf(rules.screenWidth) : 0;
+      setTall(c, picture && rules.fullHeight);
       return team ? createArenaObjects(c) : r.original(c, 0xc02631);
     });
     r.override(0xc11f71, teamArenaCamera);
+    // the singles camera: the original unless the picture is wide (wideSingles)
+    r.override(SINGLES_CAMERA, (c) => (c.wide ? singlesWideCamera(c) : r.original(c, SINGLES_CAMERA)));
     installItems(r);
     installSprites(r);
     installCountOut(r);

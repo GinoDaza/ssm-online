@@ -34,7 +34,7 @@ The server prints its addresses. Friends on the same LAN or VPN (Radmin VPN work
 - [x] Sound: SPC700 + DSP running the original driver, sample for sample with the emulator
 - [x] Online play with rollback netcode
 - [x] 2 vs 2 in the full arena: out of the ring, on the floor, with the ringside items, count-out
-- [x] Wider screen (16:9) and full-height picture in the full arena
+- [x] Wider screen (16:9) and full-height picture in the full arena, for 2 vs 2 and 1 vs 1
 - [x] Multitap: up to four human players, local or online
 - [ ] 4 vs 4
 

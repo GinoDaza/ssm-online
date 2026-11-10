@@ -105,6 +105,12 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   The front limit holds at once: the floor walk (C18F05) puts a wrestler back at D0 below the
   target, so a higher camera would pull him toward the ring; when they do not fit, the back
   one is left out at the top.
+- Singles (`Ruleset.wideSingles`): a Single Match in this mode gets the same wide, full-height
+  picture (set at C02631 like a team match's, without the overclock or the team arena objects)
+  and the same camera: C1B90B (`camera.ts` singlesWideCamera) frames the two wrestlers with the
+  team rule above instead of the singles one (the pushing wrestler at the SNES screen's margins
+  10 / F0, the snap to an arena side), then runs the original tail C1BB43 (shake, smoothing).
+  Everything else in a singles match is the original (`rules/test/singles-wide.test.ts`).
 - Not in team play, so not in this mode: the referee himself (singles uses object 0C00, a
   wrestler in team play).
 

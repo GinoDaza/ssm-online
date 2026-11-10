@@ -23,4 +23,9 @@ export interface Ruleset {
    * above and below).
    */
   readonly fullHeight: boolean;
+  /**
+   * Singles matches get the same picture as the team matches of this mode (screenWidth,
+   * fullHeight) and its camera (camera.ts). Original: false, the SNES picture.
+   */
+  readonly wideSingles: boolean;
 }
