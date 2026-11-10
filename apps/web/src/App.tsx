@@ -4,7 +4,7 @@ import { PLAYABLE_RULES, rulesById, type Ruleset } from '@ssm/rules';
 import { Fit, useGameScale } from './Fit.tsx';
 import { KEY_HELP } from './input.ts';
 import { play, type Online } from './play.ts';
-import { Room } from './room.ts';
+import { MAX_PLAYERS, Room, TEAMS } from './room.ts';
 
 type Screen = { kind: 'menu' } | { kind: 'room'; room: Room } | { kind: 'game'; online: Online | null; rules: Ruleset };
 
@@ -150,9 +150,9 @@ function Menu({ rules, setRules, onLocal, onJoin }: RulesProps & { onLocal: () =
           <li key={r.code}>
             <b>{r.code}</b>
             <span className="help">
-              {r.players.join(', ')} · {r.playing ? 'playing' : `${r.players.length}/4`}
+              {r.players.join(', ')} · {r.playing ? 'playing' : `${r.players.length}/${MAX_PLAYERS}`}
             </span>
-            <button disabled={r.playing || r.players.length >= 4} onClick={() => join(r.code)}>
+            <button disabled={r.playing || r.players.length >= MAX_PLAYERS} onClick={() => join(r.code)}>
               Join
             </button>
           </li>
@@ -219,10 +219,10 @@ function Lobby({ room, rules, setRules, onStart, onBack }: RulesProps & { room: 
         {[0, 1].map((team) => (
           <div key={team} className={`team-box team-${team}`}>
             <h2>Team {team + 1}</h2>
-            {[team, team + 2].map((k) => {
+            {TEAMS[team]!.map((k) => {
               const m = room.ordered[k];
               if (!m) return <p key={k} className="help">P{k + 1} · CPU</p>;
-              const others = [1 - team, 3 - team].filter((j) => room.ordered[j]);
+              const others = TEAMS[1 - team]!.filter((j) => room.ordered[j]);
               return (
                 <p key={k} className={picked === k ? 'picked' : ''}>
                   <span>
@@ -233,7 +233,7 @@ function Lobby({ room, rules, setRules, onStart, onBack }: RulesProps & { room: 
                       {team ? '← Team 1' : 'Team 2 →'}
                     </button>
                   )}
-                  {room.isHost && picked !== null && picked % 2 !== team && (
+                  {room.isHost && picked !== null && !(TEAMS[team] as readonly number[]).includes(picked) && (
                     <button onClick={() => (room.swap(picked, k), setPicked(null))}>Swap</button>
                   )}
                   {room.isHost && picked === k && <button onClick={() => setPicked(null)}>Cancel</button>}
@@ -248,9 +248,11 @@ function Lobby({ room, rules, setRules, onStart, onBack }: RulesProps & { room: 
           <button onClick={() => (setPicked(null), room.shuffle())}>Random teams</button>
         </div>
       )}
-      {room.ordered.length > 4 && <p className="help">Watching (room full): {room.ordered.slice(4).map((m) => m.name).join(', ')}</p>}
+      {room.ordered.length > MAX_PLAYERS && <p className="help">Watching (room full): {room.ordered.slice(MAX_PLAYERS).map((m) => m.name).join(', ')}</p>}
       <p className="help">Friends join with the same room name · ping {room.ping} ms</p>
-      <p className="help">Up to 4 players: in Team Battle Royal players 3 and 4 join by pressing Start. Teams count in Team Battle Royal; in a single match P1 fights P2</p>
+      <p className="help">
+        Up to 8 players. Team Battle Royal: P1-P4 play 2 VS 2 and up; P5-P8 play the extra wrestlers of 3 VS 3 and 4 VS 4 (P5, P6 from 3 VS 3, P7, P8 in 4 VS 4). P2-P4 join by pressing Start on the Game Mode Select or on ENTER THE MATCH, P5-P8 on ENTER THE MATCH; P5-P8 then pick their wrestler beside the player select. In a single match P1 fights P2.
+      </p>
       {room.isHost ? (
         <div className="row">
           <RulesPicker rules={rules} setRules={setRules} />

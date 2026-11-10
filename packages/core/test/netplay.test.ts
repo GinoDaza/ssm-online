@@ -1,6 +1,7 @@
 /**
  * Netplay: peers exchanging packets through a simulated relay (in order, with latency) must
- * agree on every checksum, keep their frames close (time sync), and detect a desync.
+ * agree on every checksum, keep their frames close (time sync), and detect a desync; with
+ * more than four, players 5-8 reach the game as Machine.padsx.
  */
 import { describe, expect, it } from 'vitest';
 import { Game, Netplay } from '../src/index.ts';
@@ -21,9 +22,10 @@ interface Run {
  * Peer p starts at tick starts[p]; a message sent at tick t reaches the others at tick
  * t + latency(t) but never before the one sent earlier (a TCP relay).
  */
-function play(players: number, ticks: number, starts: number[], latency: (t: number) => number, corrupt?: (t: number, peers: Netplay[]) => void): Run {
+function play(players: number, ticks: number, starts: number[], latency: (t: number) => number, corrupt?: (t: number, peers: Netplay[]) => void, setup?: (g: Game) => void): Run {
   const peers = Array.from({ length: players }, (_, slot) => {
     const g = new Game(loadRom());
+    setup?.(g);
     g.powerOn();
     return new Netplay(g, { players, slot, delay: 2, checksumEvery: 30 });
   });
@@ -78,6 +80,24 @@ describe.skipIf(!haveRom())('netplay', () => {
       expect(peers[0]!.skipped).toBeGreaterThan(0);
     }, 120_000);
   }
+
+  it('6 peers: players 5 and 6 drive Machine.padsx, every checksum agrees', () => {
+    // a mode would give players 5-8 wrestlers; here a frame routine folds their pads into WRAM
+    const fold = (g: Game) =>
+      g.runner.override(0xc00369, (c) => {
+        for (let k = 0; k < 4; k++) c.wram[0x1ff0 + k] = (c.wram[0x1ff0 + k]! * 31 + (c.padsx[k]! >> 4)) & 0xff;
+        return g.runner.original(c, 0xc00369);
+      });
+    const { peers, sums } = play(6, 400, [0, 2, 4, 1, 3, 5], (t) => 2 + ((t * 7) % 3), undefined, fold);
+    for (const n of peers) expect(n.desync).toBe(-1);
+    const common = [...sums[0]!.keys()].filter((f) => sums.every((m) => m.has(f)));
+    expect(common.length).toBeGreaterThan(5);
+    for (const f of common) for (const m of sums) expect(m.get(f), `frame ${f}`).toBe(sums[0]!.get(f));
+    const w = peers[0]!.session.game.m.wram;
+    expect(w[0x1ff0], 'player 5').not.toBe(0);
+    expect(w[0x1ff1], 'player 6').not.toBe(0);
+    expect(w[0x1ff2], 'player 7: none').toBe(0);
+  }, 180_000);
 
   it('detects a desync', () => {
     const { peers } = play(2, 300, [0, 0], () => 2, (t, peers) => {

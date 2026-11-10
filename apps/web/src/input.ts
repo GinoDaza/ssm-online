@@ -1,4 +1,7 @@
-/** Local controls -> SNES pad words: the keyboard is pad 1, gamepads are pads 1-4 in order. */
+/**
+ * Local controls -> pad words: the keyboard is pad 1, gamepads are pads 1-4 in order, then
+ * players 5-8 (3 vs 3 / 4 vs 4: Game.step's words 5-8).
+ */
 import { PAD } from '@ssm/core';
 
 /**
@@ -51,12 +54,12 @@ export class Controls {
     this.keys = pressed ? this.keys | bit : this.keys & ~bit;
   }
 
-  /** The four pad words now. */
+  /** The pad words now, as Game.step takes them: pads 1-5 (5 unused), players 5-8. */
   read(): number[] {
-    const pads = [this.keys, 0, 0, 0];
+    const pads = [this.keys, 0, 0, 0, 0, 0, 0, 0, 0];
     let k = 0;
     for (const gp of navigator.getGamepads?.() ?? []) {
-      if (!gp || k > 3) continue;
+      if (!gp || k > 7) continue;
       let w = 0;
       gp.buttons.forEach((b, i) => {
         if (b.pressed) w |= GAMEPAD[i] ?? 0;
@@ -66,7 +69,8 @@ export class Controls {
       if (x > 0.5) w |= PAD.RIGHT;
       if (y < -0.5) w |= PAD.UP;
       if (y > 0.5) w |= PAD.DOWN;
-      pads[k] = pads[k]! | w;
+      const word = k < 4 ? k : k + 1;
+      pads[word] = pads[word]! | w;
       k++;
     }
     return pads;

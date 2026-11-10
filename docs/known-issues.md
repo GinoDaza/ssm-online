@@ -19,10 +19,16 @@ Bugs that are understood but not fixed yet, with their cause and the planned fix
   goes on after the first fills, so which pieces land in which OAM can change from frame to
   frame), the bank-2 tiles (`sprites.ts` `extraTiles`: the direct ROM copy may lag or skip an
   animation frame's upload) and the bank-2 palettes / priorities against the base wrestlers.
-- **The extra wrestlers are always the CPU's.** Humans play the original four slots. Their
-  characters are picked by the human who picks the team's CPU partner (`select.ts`); a side
-  with two humans has nobody to pick, so its extras get the first free characters. Fix: pads
-  5-8 (`+77` = a pad number; C110CB reads pads by it).
+- **Extras nobody picks get the first free characters**: a CPU extra's character is picked by
+  the human who picks the team's CPU partner (`select.ts`); a side with two humans in pads 1-4
+  has no such human, so its CPU extras get the first characters nobody has.
+- **Players 5-8 play with pad 1's button assignment** (the options set pads 1-4's), and their
+  joining and picking make no sound.
+- **Two players online are teammates in Team Battle Royal.** With the multitap (the client
+  always plugs it in) pads 1 and 2 are one team against the CPU, so two friends cannot fight
+  each other there; the console's own choice (2P's left / right before the selection: same
+  team or opposite) only runs without a multitap (C03A9F, `$1B9C` = 0). Fix: empty slots in
+  the session (P1 and P3 with nobody in P2), or no multitap for two players.
 - **The time-over count-up on the result screen shows the four base wrestlers' bars only**
   (C05B27 counts first members, then second). The judge adds the extras' bars, so the result is
   right; the count does not show them.

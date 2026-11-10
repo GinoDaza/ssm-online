@@ -22,6 +22,8 @@
  * first free characters at the match start (teams.ts).
  */
 import type { Machine, Runner } from '@ssm/core';
+import { joined } from './players.ts';
+import { RULES_BYTES } from './slots.ts';
 
 const CURSORS = 0x1b86;
 const PHASE = 0x1b99;
@@ -30,8 +32,7 @@ const START_PLACES = 0xc0b9fe;
 const CURSOR_CHARACTER = 0xc0a661;
 /** a pick is its cursor + 1; none yet */
 const NONE = 0;
-/** rulesBytes: the picks, two a side */
-const PICKS = 0;
+const PICKS = RULES_BYTES.PICKS;
 
 const INIT_MASKS = 0xc03823;
 const PARTNER_DONE = 0xc03a71;
@@ -62,6 +63,7 @@ export function installSelect(r: Runner, size: (c: Machine) => number): void {
   // C03823: the selection starts (its partner masks), no extra picked yet
   r.override(INIT_MASKS, (c) => {
     c.rulesBytes.fill(NONE, PICKS, PICKS + 4);
+    c.rulesBytes.fill(0, RULES_BYTES.CURSORS, RULES_BYTES.CURSORS + 4);
     return r.original(c, INIT_MASKS);
   });
 
@@ -75,7 +77,8 @@ export function installSelect(r: Runner, size: (c: Machine) => number): void {
       const phase = w[PHASE]!;
       const slot = c.rom.u8(PARTNER_SLOT + pad + 4 * (phase ? 1 : 0));
       const side = sideOfSlot(c, slot, phase);
-      const k = picks(c, side, extras).indexOf(-1);
+      // the next extra of the side without a pick, players 5-8's left to them (players.ts)
+      const k = picks(c, side, extras).findIndex((p, k) => p < 0 && !joined(c, 2 * k + side));
       if (k >= 0) {
         c.tick(20 * c.fast);
         c.rulesBytes[PICKS + 2 * side + k] = w[CURSORS + slot]! + 1;

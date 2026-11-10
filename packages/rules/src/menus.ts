@@ -12,18 +12,21 @@
  *
  * The team player select of a 3 VS 3 or 4 VS 4 shows the extras picked so far (select.ts) by
  * name in the margins, each side's on its side, in the screen's own font (BG3, 8 x 16: two
- * tiles a letter; the names are the game's, the text records at C0:8A37).
+ * tiles a letter; the names are the game's, the text records at C0:8A37); players 5-8's with
+ * their number, the name under their cursor blinking until they pick.
  *
  * The entry screen of a 3 VS 3 or 4 VS 4 (the Game Mode Select's choice, menu.ts) shows the
  * extra players' boxes too, in the HUD panels (Machine.hudx) of the margins: the original's
  * four 8 x 11 tile boxes (BG3 rows 17-27, one a player in palettes 0-3: 1P orange, 2P blue,
  * 3P yellow, 4P green) get 5P left and 6P right of them, 7P and 8P above those (rows 5-15),
  * in the panels' own palettes. Their inside is the inside of an original box still waiting for
- * its player (`$1BA6`[pad] = 0; PRESS START, blinking as it does).
+ * its player (`$1BA6`[pad] = 0; PRESS START, blinking as it does), or, once the player joined
+ * (players.ts), of one whose player did (ENTRY ACCEPTED).
  */
 import { HUDX_COLS, HUDX_ROWS, MARGIN_SPRITES, MARGIN_WORDS, Margin, type Machine, type Runner } from '@ssm/core';
 import { chosenTeamSize } from './menu.ts';
 import { cursorCharacter, picks } from './select.ts';
+import { joined, playerCursor } from './players.ts';
 
 const LOAD_LIST = 0xc00643;
 /** rulesWord bits 16-23: the last VRAM list loaded */
@@ -104,6 +107,9 @@ const NAMES = 0xc08a37;
 /** the select screen's font (BG3 tiles, the top half; the bottom one is the next tile) */
 const FONT_A_TO_G = [0x17, 0x19, 0x1b, 0x23, 0x25, 0x28, 0x2a];
 const FONT_H = 0x60;
+const FONT_0 = 0x01;
+/** the game's frame counter (blinks: bit 4) */
+const FRAMES = 0x1c8e;
 const TEXT = 0x2000;
 /** the names' BG3 rows: one extra at the first, two at both */
 const NAME_ROWS = [14, 17];
@@ -117,8 +123,10 @@ function nameOf(c: Machine, ch: number): string {
   return s;
 }
 
-/** A capital's top tile in the select screen's font (0: none). */
+/** A capital or digit's top tile in the select screen's font (0: none). */
 function glyph(ch: string): number {
+  const d = ch.charCodeAt(0) - 0x30;
+  if (d >= 0 && d < 10) return FONT_0 + 2 * d;
   const k = ch.charCodeAt(0) - 0x41;
   if (k < 0 || k >= 26) return 0;
   return k < 7 ? FONT_A_TO_G[k]! : FONT_H + 2 * (k - 7);
@@ -131,13 +139,19 @@ function pickedNames(c: Machine, n: number): void {
   c.hudxRows = NAME_ROWS[n - 1]! + 2 - NAME_ROWS[0]!;
   for (let side = 0; side < 2; side++)
     picks(c, side, n).forEach((pick, k) => {
-      if (pick < 0) return;
-      const name = nameOf(c, cursorCharacter(c, pick));
+      const e = 2 * k + side;
+      const human = joined(c, e);
+      const cursor = pick >= 0 ? pick : human ? playerCursor(c, e) : -1;
+      if (cursor < 0) return;
+      // the name under a cursor blinks; the number stays
+      const blink = pick < 0 && (c.wram[FRAMES]! & 0x10) !== 0;
+      const label = human ? `${5 + e}P ` : '';
+      const name = label + nameOf(c, cursorCharacter(c, cursor));
       const row = NAME_ROWS[k]! - NAME_ROWS[0]!;
-      const col = side === 0 ? HUDX_COLS - 1 - name.length : 1;
+      const col = side === 0 ? Math.max(0, HUDX_COLS - 1 - name.length) : Math.min(1, HUDX_COLS - name.length);
       [...name].forEach((ch, i) => {
         const t = glyph(ch);
-        if (!t) return;
+        if (!t || (blink && i >= label.length)) return;
         panelPut(c, side, row, col + i, TEXT | t);
         panelPut(c, side, row + 1, col + i, TEXT | (t + 1));
       });
@@ -183,9 +197,13 @@ function extraBoxes(c: Machine, n: number): void {
   const w = c.wram;
   const map = (c.ioreg[0x09]! & 0xfc) << 9;
   const bg3 = (row: number, col: number) => c.vram[map + 2 * (row * 32 + col)]! | (c.vram[map + 2 * (row * 32 + col) + 1]! << 8);
-  // the inside of a box still waiting for its player
+  // the inside of a box still waiting for its player, and of one whose player joined
   let waiting = -1;
-  for (let k = 0; k < 4; k++) if (w[ENTRY_STATE + k] === 0) waiting = k;
+  let entered = -1;
+  for (let k = 0; k < 4; k++) {
+    if (w[ENTRY_STATE + k] === 0) waiting = k;
+    else if (entered < 0) entered = k;
+  }
   c.hudxMap.fill(0);
   c.hudxRow = PANEL_ROW;
   c.hudxRows = LOW_BOXES + BOX_ROWS;
@@ -211,12 +229,13 @@ function extraBoxes(c: Machine, n: number): void {
     }
     put(0, 3, (DIGIT0 + 5 + e) | pal);
     put(0, 4, LETTER_P | pal);
+    const inside = joined(c, e) ? entered : waiting;
     for (let row = 1; row < BOX_ROWS - 1; row++) {
       put(row, 0, SIDE | pal);
       put(row, BOX_COLS - 1, SIDE | H_FLIP | pal);
-      if (waiting < 0) continue;
+      if (inside < 0) continue;
       for (let col = 1; col < BOX_COLS - 1; col++) {
-        const v = bg3(BOX_TOP + row, BOX_COLS * waiting + col);
+        const v = bg3(BOX_TOP + row, BOX_COLS * inside + col);
         if (v & 0x3ff) put(row, col, (v & ~0x1c00) | pal);
       }
     }

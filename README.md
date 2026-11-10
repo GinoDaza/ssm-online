@@ -41,5 +41,6 @@ The server prints its addresses. Friends on the same LAN or VPN (Radmin VPN work
       boxes of 5P-8P) and the player select so far
 - [x] 3 vs 3 and 4 vs 4 in the full arena: the extra wrestlers are the CPU's, with their HUD
       beside the original's; their characters are picked on the player select
+- [x] Players 5-8: up to eight humans online in 3 vs 3 and 4 vs 4
 
 See `docs/architecture.md` for how it works.

@@ -78,7 +78,7 @@ const HUDX_MAP = HUDX_TILES + 0x400;
 const HUDX_PALETTES = HUDX_MAP + HUDX_MAP_BYTES;
 const MARGINS = HUDX_PALETTES + 0x40;
 const RULES_BYTES = MARGINS + 2 * 16;
-const APU = RULES_BYTES + 16;
+const APU = RULES_BYTES + 32;
 /**
  * What the wide picture's margins show (Machine.margins): per BG layer (BG1-BG3, `MARGIN_WORDS`
  * words each) its mode, then the source patch; the last word is the sprite flags.
@@ -193,7 +193,7 @@ export class Machine {
    */
   rulesWord = 0;
   /** more state the game modes own (extension), never read by the core */
-  readonly rulesBytes = this.state.subarray(RULES_BYTES, RULES_BYTES + 16);
+  readonly rulesBytes = this.state.subarray(RULES_BYTES, RULES_BYTES + 32);
   /** the sound unit (SPC700 + DSP), its state in the same buffer */
   readonly apu = new Apu(this.state.subarray(APU, STATE_SIZE));
   readonly rom: RomImage;
@@ -269,6 +269,11 @@ export class Machine {
 
   /** the pad words (SNES layout, pads 1-5) the controllers hold now (set by the host) */
   readonly pads = new Uint16Array(5);
+  /**
+   * Players 5-8's pad words (extension, SNES layout, set by the host with the pads): no port
+   * reads them; game modes give them to wrestlers of their own.
+   */
+  readonly padsx = new Uint16Array(4);
   /** start of the block running now (diagnostics) */
   blockPc = 0;
   /** the renderer: called for each visible line (0-223) when the beam reaches it */

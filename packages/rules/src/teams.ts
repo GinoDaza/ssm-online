@@ -25,6 +25,7 @@
 import type { Machine, Runner } from '@ssm/core';
 import { chosenTeamSize } from './menu.ts';
 import { cursorCharacter, picks } from './select.ts';
+import { joined } from './players.ts';
 import { BASE, EXT, EXTRA, bigTeams, extras, inPlay, isExtra, nextSlot, pages, prevSlot, rd16, setTeamSize, sideOf, wr16 } from './slots.ts';
 
 const TEAM_FLAG = 0x1ba0;
@@ -156,6 +157,7 @@ function extraStart(c: Machine): void {
   wr16(c, page + 0xa9, opps[1]!);
   wr16(c, page + 0xf2, opps[1]!);
   w[page + 0x17d] = side;
+  w[page + 0x77] = joined(c, e) ? 5 + e : 0; // player 5 + e, or the CPU (players.ts)
   w[page + 0x71] = 0x38;
   w[page + 0x7c] = 0x38;
   w[page + 0x0b] = side ? 0x00 : 0x40;

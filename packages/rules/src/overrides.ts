@@ -14,7 +14,8 @@ import { installCountOut } from './countout.ts';
 import { SINGLES_CAMERA, singlesWideCamera, teamArenaCamera } from './camera.ts';
 import { installItems } from './items.ts';
 import { installMenu } from './menu.ts';
-import { installMenus, menuPicture } from './menus.ts';
+import { Screen, installMenus, menuPicture, screenOf } from './menus.ts';
+import { installPlayers, playersFrame } from './players.ts';
 import { installOamExt } from './oamext.ts';
 import { installReferee } from './referee.ts';
 import { chosenSize, extraChars, installTeams } from './teams.ts';
@@ -128,8 +129,12 @@ export function installRules(game: Game, rules: Ruleset): void {
     r.override(SINGLES_CAMERA, (c) => (c.wide ? singlesWideCamera(c) : r.original(c, SINGLES_CAMERA)));
     installItems(r);
     const margin = marginOf(rules.screenWidth);
-    installSprites(r, rules.wideMenus ? (c) => menuPicture(c, margin) : undefined);
-    if (rules.wideMenus) installMenus(r);
+    // once a frame outside a match: players 5-8 (3 vs 3 / 4 vs 4), the menus' picture
+    installSprites(r, (c) => {
+      if (rules.modeMenu) playersFrame(c, chosenSize(c), screenOf(c) === Screen.ENTRY && c.wram[0x56] === 4);
+      if (rules.wideMenus) menuPicture(c, margin);
+    });
+    if (rules.wideMenus || rules.modeMenu) installMenus(r);
     installCountOut(r);
     installWide(r);
   }
@@ -139,6 +144,7 @@ export function installRules(game: Game, rules: Ruleset): void {
     game.m.ramExt = true;
     installTeams(r);
     installSelect(r, chosenSize);
+    installPlayers(r, chosenSize);
     installReferee(r);
     installOamExt(r);
     installHud(r, extraChars);

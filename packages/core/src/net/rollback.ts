@@ -1,6 +1,7 @@
 /**
  * Rollback session (GGPO-style) over one Game. Every peer runs the whole game; only pad words
- * travel. Each pad slot (0-3) is fed by one peer through addInput(), in frame order. When the
+ * travel. Each pad slot (0-7: pads 1-4, then players 5-8, Machine.padsx) is fed by one peer
+ * through addInput(), in frame order. When the
  * session simulates a frame whose input for a slot has not arrived, it predicts it (the slot's
  * last known pad). When the real input arrives and differs from what was used, the next
  * advance() restores the snapshot of that frame and re-simulates up to the present.
@@ -19,7 +20,7 @@ import type { Game } from '../cpu/game.ts';
 import { checksum } from '../cpu/machine.ts';
 
 export interface RollbackOptions {
-  /** pad slots in play (1-4): pads 0..players-1; the others hold 0 */
+  /** pad slots in play (1-8): slots 0..players-1; the others hold 0 */
   players: number;
   /** the deepest rollback, in frames (default 8) */
   maxRollback?: number;
@@ -29,6 +30,10 @@ export interface RollbackOptions {
 
 /** input history, in frames (a power of two) */
 const RING = 256;
+/** pad slots: pads 1-4, players 5-8 */
+export const SLOTS = 8;
+/** the word of Game.step a slot fills: pads 1-4, then (after pad 5) players 5-8 */
+const STEP_WORD = [0, 1, 2, 3, 5, 6, 7, 8] as const;
 
 export class Rollback {
   readonly game: Game;
@@ -46,14 +51,14 @@ export class Rollback {
   onChecksum: ((frame: number, sum: number) => void) | null = null;
 
   /** pads received, per frame and slot */
-  private readonly inputs = new Uint16Array(RING * 4);
+  private readonly inputs = new Uint16Array(RING * SLOTS);
   /** pads the simulation used, per frame and slot */
-  private readonly used = new Uint16Array(RING * 4);
+  private readonly used = new Uint16Array(RING * SLOTS);
   /** per slot: the inputs of the frames before this one are known */
-  private readonly known = new Int32Array(4);
+  private readonly known = new Int32Array(SLOTS);
   /** snaps[f % length]: the state at the start of frame f */
   private readonly snaps: Uint8Array[];
-  private readonly pads = new Uint16Array(4);
+  private readonly pads = new Uint16Array(9);
   /** earliest frame simulated with a wrong prediction (-1: none) */
   private rollbackTo = -1;
   private nextCheck = 0;
@@ -63,7 +68,8 @@ export class Rollback {
     this.players = opts.players;
     this.maxRollback = opts.maxRollback ?? 8;
     this.checksumEvery = opts.checksumEvery ?? 60;
-    for (let s = opts.players; s < 4; s++) this.known[s] = 0x7fffffff;
+    if (opts.players < 1 || opts.players > SLOTS) throw new Error(`players: 1-${SLOTS}`);
+    for (let s = opts.players; s < SLOTS; s++) this.known[s] = 0x7fffffff;
     this.snaps = Array.from({ length: this.maxRollback + 1 }, () => new Uint8Array(game.m.stateSize));
   }
 
@@ -88,7 +94,7 @@ export class Rollback {
     if (frame < k) return true;
     if (frame > k) return false;
     if (frame - this.frame >= RING - this.maxRollback - 1) throw new Error(`input for frame ${frame} too far ahead`);
-    const i = (frame & (RING - 1)) * 4 + slot;
+    const i = (frame & (RING - 1)) * SLOTS + slot;
     this.inputs[i] = pad;
     this.known[slot] = frame + 1;
     if (frame < this.frame && this.used[i] !== pad && (this.rollbackTo < 0 || frame < this.rollbackTo)) {
@@ -124,12 +130,12 @@ export class Rollback {
   }
 
   private run(f: number): void {
-    const base = (f & (RING - 1)) * 4;
-    for (let s = 0; s < 4; s++) {
+    const base = (f & (RING - 1)) * SLOTS;
+    for (let s = 0; s < SLOTS; s++) {
       const k = this.known[s]!;
-      const pad = s >= this.players ? 0 : f < k ? this.inputs[base + s]! : k > 0 ? this.inputs[((k - 1) & (RING - 1)) * 4 + s]! : 0;
+      const pad = s >= this.players ? 0 : f < k ? this.inputs[base + s]! : k > 0 ? this.inputs[((k - 1) & (RING - 1)) * SLOTS + s]! : 0;
       this.used[base + s] = pad;
-      this.pads[s] = pad;
+      this.pads[STEP_WORD[s]!] = pad;
     }
     this.game.m.save(this.snaps[f % this.snaps.length]);
     this.game.step(this.pads);

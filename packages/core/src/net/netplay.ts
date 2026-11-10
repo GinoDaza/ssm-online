@@ -18,14 +18,14 @@
  *   where a peer's state differed.
  *
  * Messages (little-endian):
- *   input     u8 1, u8 slot, i32 frame, i32 known[4], i8 advantage[4], i32 start, u8 n, u16 pad[n]
+ *   input     u8 1, u8 slot, i32 frame, i32 known[8], i8 advantage[8], i32 start, u8 n, u16 pad[n]
  *   checksum  u8 2, u8 slot, i32 frame, u32 sum
  */
 import type { Game } from '../cpu/game.ts';
-import { Rollback } from './rollback.ts';
+import { Rollback, SLOTS } from './rollback.ts';
 
 export interface NetplayOptions {
-  /** pad slots in play (2-4); peer k feeds slot k */
+  /** pad slots in play (2-8: pads 1-4, then players 5-8); peer k feeds slot k */
   players: number;
   /** the local slot */
   slot: number;
@@ -43,6 +43,12 @@ const HISTORY = 256;
 const MAX_PADS = 64;
 /** fewest ticks between two skipped ticks */
 const SKIP_GAP = 8;
+/** input packet offsets: known[SLOTS], advantage[SLOTS], start, n, the pads */
+const KNOWN = 6;
+const ADVANTAGE = KNOWN + 4 * SLOTS;
+const START = ADVANTAGE + SLOTS;
+const COUNT = START + 4;
+const PADS = COUNT + 1;
 
 export class Netplay {
   readonly session: Rollback;
@@ -60,10 +66,10 @@ export class Netplay {
 
   private readonly mine = new Uint16Array(HISTORY);
   /** per remote slot: frames of the local slot that peer has */
-  private readonly acked = new Int32Array(4);
+  private readonly acked = new Int32Array(SLOTS);
   /** per remote slot: its frame, and how far it is ahead of the local peer */
-  private readonly theirFrame = new Int32Array(4);
-  private readonly theirAdvantage = new Int32Array(4);
+  private readonly theirFrame = new Int32Array(SLOTS);
+  private readonly theirAdvantage = new Int32Array(SLOTS);
   /** own checksums not yet compared with every peer, and how many peers compared */
   private readonly sums = new Map<number, number>();
   private readonly checked = new Map<number, number>();
@@ -138,11 +144,11 @@ export class Netplay {
     if (from >= this.players || from === this.slot) return;
     if (kind === INPUT) {
       this.theirFrame[from] = dv.getInt32(2, true);
-      this.acked[from] = Math.max(this.acked[from]!, dv.getInt32(6 + 4 * this.slot, true));
-      this.theirAdvantage[from] = dv.getInt8(22 + this.slot);
-      const start = dv.getInt32(26, true);
-      const n = dv.getUint8(30);
-      for (let k = 0; k < n; k++) this.session.addInput(from, start + k, dv.getUint16(31 + 2 * k, true));
+      this.acked[from] = Math.max(this.acked[from]!, dv.getInt32(KNOWN + 4 * this.slot, true));
+      this.theirAdvantage[from] = dv.getInt8(ADVANTAGE + this.slot);
+      const start = dv.getInt32(START, true);
+      const n = dv.getUint8(COUNT);
+      for (let k = 0; k < n; k++) this.session.addInput(from, start + k, dv.getUint16(PADS + 2 * k, true));
     } else if (kind === CHECKSUM) {
       const f = dv.getInt32(2, true);
       const sum = dv.getUint32(6, true);
@@ -156,18 +162,18 @@ export class Netplay {
     let start = s.knownFor(this.slot);
     for (let r = 0; r < this.players; r++) if (r !== this.slot) start = Math.min(start, this.acked[r]!);
     const n = Math.min(s.knownFor(this.slot) - start, MAX_PADS);
-    const b = new Uint8Array(31 + 2 * n);
+    const b = new Uint8Array(PADS + 2 * n);
     const dv = new DataView(b.buffer);
     dv.setUint8(0, INPUT);
     dv.setUint8(1, this.slot);
     dv.setInt32(2, s.frame, true);
-    for (let r = 0; r < 4; r++) {
-      dv.setInt32(6 + 4 * r, r < this.players ? s.knownFor(r) : 0, true);
-      dv.setInt8(22 + r, r < this.players && r !== this.slot ? Math.max(-128, Math.min(127, this.advantage(r))) : 0);
+    for (let r = 0; r < SLOTS; r++) {
+      dv.setInt32(KNOWN + 4 * r, r < this.players ? s.knownFor(r) : 0, true);
+      dv.setInt8(ADVANTAGE + r, r < this.players && r !== this.slot ? Math.max(-128, Math.min(127, this.advantage(r))) : 0);
     }
-    dv.setInt32(26, start, true);
-    dv.setUint8(30, n);
-    for (let k = 0; k < n; k++) dv.setUint16(31 + 2 * k, this.mine[(start + k) & (HISTORY - 1)]!, true);
+    dv.setInt32(START, start, true);
+    dv.setUint8(COUNT, n);
+    for (let k = 0; k < n; k++) dv.setUint16(PADS + 2 * k, this.mine[(start + k) & (HISTORY - 1)]!, true);
     this.send(b);
   }
 

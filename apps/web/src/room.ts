@@ -2,8 +2,18 @@
  * A room on the server's WebSocket relay (/ws). The server only relays: the peer with the
  * lowest id is the host, and its `start` message fixes the players (slot order) and the input
  * delay for everyone. Before the start the host can reorder the players (`order` messages): the
- * slot is the pad, and in Team Battle Royal pads 1 and 3 play against pads 2 and 4.
+ * slot is the pad (1-4, then players 5-8 of 3 vs 3 / 4 vs 4). In Team Battle Royal (with the
+ * multitap, as the client plays) pads 1 and 2 play against pads 3 and 4; players 5 and 7 join
+ * pad 1's team, 6 and 8 the other (TEAMS).
  */
+/** the slots of each team in Team Battle Royal */
+export const TEAMS = [
+  [0, 1, 4, 6],
+  [2, 3, 5, 7],
+] as const;
+/** players in a match at most */
+export const MAX_PLAYERS = 8;
+
 export interface Member {
   peer: number;
   name: string;
@@ -101,11 +111,11 @@ export class Room {
     this.onChange();
   }
 
-  /** Host: deal the four playing slots at random (the watchers keep their places). */
+  /** Host: deal the playing slots at random (the watchers keep their places). */
   shuffle(): void {
     if (!this.isHost) return;
     const next = [...this.order];
-    const n = Math.min(4, next.length);
+    const n = Math.min(MAX_PLAYERS, next.length);
     for (let i = n - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [next[i], next[j]] = [next[j]!, next[i]!];
@@ -123,7 +133,7 @@ export class Room {
 
   /** Host: start the match for everyone in the room (the host included). */
   start(delay: number, rules: string): void {
-    const msg: StartMsg = { t: 'start', players: this.order.slice(0, 4), delay, rules };
+    const msg: StartMsg = { t: 'start', players: this.order.slice(0, MAX_PLAYERS), delay, rules };
     this.ws.send(JSON.stringify(msg));
     this.onStart(msg);
   }

@@ -29,6 +29,7 @@
  * 2 VS 2 and without 1 VS 1, so three or four humans can play 3 VS 3 or 4 VS 4.
  */
 import type { Machine, Runner } from '@ssm/core';
+import { resetPlayers } from './players.ts';
 
 /** rulesWord: the choice 0-3 (1 VS 1 .. 4 VS 4) */
 const CHOICE = 3;
@@ -162,6 +163,7 @@ export function installMenu(r: Runner): void {
   r.split(0xc01dea);
   r.override(0xc01de8, (c) => {
     c.rulesWord &= ~BUILT;
+    resetPlayers(c);
     return r.original(c, 0xc01de8);
   });
   // C030CC LDA $1BA4 / CMP #$03 / BCS C0313C: three or four humans choose too, a team mode

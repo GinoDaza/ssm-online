@@ -142,8 +142,18 @@ for its player.
 
 **3 vs 3 and 4 vs 4** (the menu's 3 VS 3 / 4 VS 4 in the full arena, `rules/src/teams.ts`). A
 Team Battle Royal with one or two more wrestlers a team, run by the original team engine. The
-players pick the four wrestlers of the original selection (up to four humans); the extras are
-the CPU's. The team size is set at the match start (C189BC) in `Machine.rulesWord`.
+players pick the four wrestlers of the original selection (up to four humans, pads 1-4); the
+extras are players 5-8's or the CPU's. The team size is set at the match start (C189BC) in
+`Machine.rulesWord`.
+
+- Players 5-8 (`players.ts`): their pads are a Machine extension (`Machine.padsx`, Game.step's
+  words 5-8, slots 4-7 of a rollback session). Player 5 + e plays extra e (5P and 7P with pad
+  1's team). They join with START on the Team Battle Royal entry (shown for 3 VS 3 / 4 VS 4
+  even with four humans, C03197), pick their extra's character in the player select's margins
+  (left / right, a confirm button; the selection waits for them, C038BA) and play it: the
+  extra's +77 (the pad number; 0 = the CPU) is 5-8, and the input gate's read of pad +77
+  (C110E9, the held and new words +91 / +93) takes their pad, with pad 1's button
+  assignment (`rules/test/players.test.ts`).
 
 - Picking the extras (`select.ts`): on the team player select a human whose team has a CPU
   partner picks it last: the first confirmations (C03A71, which ends the partner pick) go to the
@@ -239,12 +249,14 @@ jitter and stalls, and checks they end in the state of a run without network.
 tick t is the input of frame t + delay; each input packet repeats the unacknowledged inputs
 and carries what the sender has of every slot (the acks) and how many frames it is ahead of
 each peer (time sync: the peer that runs ahead skips a tick now and then); checksums every
-60 frames are compared across peers. `netplay.test.ts` runs 2 and 3 peers that start at
-different times through a simulated relay.
+60 frames are compared across peers. `netplay.test.ts` runs 2, 3 and 6 peers that start at
+different times through a simulated relay. A session has up to eight slots: pads 1-4, then
+players 5-8 of 3 vs 3 / 4 vs 4 (`Machine.padsx`).
 
 In the browser (`apps/web`), a room is a name on the server: the peer that joined first is
-the host, picks the input delay and starts; its `start` message fixes the slots (join order)
-for everyone. Transport: the server's WebSocket relay (LAN / VPN now, a cloud
+the host, picks the input delay and starts; its `start` message fixes the slots (join order,
+up to eight; the host can move players between the teams: pads 1, 2 and players 5, 7 against
+pads 3, 4 and players 6, 8) for everyone. Transport: the server's WebSocket relay (LAN / VPN now, a cloud
 server later).
 
 ## Picture and sound
