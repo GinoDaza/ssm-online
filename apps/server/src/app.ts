@@ -11,15 +11,21 @@ export type Fallback = (req: IncomingMessage, res: ServerResponse) => void;
 
 export function createApp(fallback: Fallback): Server {
   const rom = loadRomFile();
+  let listRooms = (): unknown[] => [];
   const server = createServer((req, res) => {
     if (req.url === '/api/rom') {
       res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': rom.length });
       res.end(rom);
       return;
     }
+    if (req.url === '/api/rooms') {
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(listRooms()));
+      return;
+    }
     fallback(req, res);
   });
-  attachRooms(server);
+  listRooms = attachRooms(server);
   return server;
 }
 

@@ -4,6 +4,7 @@
  *   client -> server  {t: 'join', room, name}   {t: 'ping', id}   anything else: relayed
  *   server -> client  {t: 'joined', room, peer, peers}  {t: 'peer-join'|'peer-leave', peer}
  *                     {t: 'pong', id}
+ * The room list (code, names, whether a match started) is public: GET /api/rooms.
  */
 import type { Server } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -14,9 +15,18 @@ interface Peer {
   ws: WebSocket;
 }
 
-export function attachRooms(server: Server): void {
+export interface RoomInfo {
+  code: string;
+  players: string[];
+  playing: boolean;
+}
+
+/** Attaches the relay; returns the current room list. */
+export function attachRooms(server: Server): () => RoomInfo[] {
   const wss = new WebSocketServer({ server, path: '/ws' });
   const rooms = new Map<string, Map<number, Peer>>();
+  /** rooms whose host sent `start`; cleared when the room empties */
+  const playing = new Set<string>();
   let nextId = 1;
 
   wss.on('connection', (ws) => {
@@ -47,6 +57,7 @@ export function attachRooms(server: Server): void {
         ws.send(JSON.stringify({ t: 'joined', room, peer: id, peers: others }));
         broadcast(room, id, JSON.stringify({ t: 'peer-join', peer: id, name }));
       } else if (room) {
+        if (msg.t === 'start') playing.add(room);
         relay(room, id, JSON.stringify({ ...msg, from: id }), false);
       }
     });
@@ -55,7 +66,10 @@ export function attachRooms(server: Server): void {
       if (!room) return;
       const peers = rooms.get(room);
       peers?.delete(id);
-      if (peers && peers.size === 0) rooms.delete(room);
+      if (peers && peers.size === 0) {
+        rooms.delete(room);
+        playing.delete(room);
+      }
       else broadcast(room, id, JSON.stringify({ t: 'peer-leave', peer: id }));
     });
   });
@@ -67,4 +81,6 @@ export function attachRooms(server: Server): void {
   function relay(room: string, from: number, data: Buffer | string, binary: boolean): void {
     for (const p of rooms.get(room)?.values() ?? []) if (p.id !== from) p.ws.send(data, { binary });
   }
+
+  return () => [...rooms].map(([code, peers]) => ({ code, players: [...peers.values()].map((p) => p.name), playing: playing.has(code) }));
 }
