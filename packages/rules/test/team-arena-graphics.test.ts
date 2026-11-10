@@ -24,6 +24,10 @@ describe.skipIf(!haveRom())('team matches in the singles arena: graphics', () =>
     const items = Array.from({ length: 32 }, (_, i) => g.m.rom.u8(0xcbfbc0 + i));
     expect(Array.from(g.m.cgramx.subarray(0xe2, 0x100))).toEqual(items.slice(2));
     expect(Array.from(g.m.cgram.subarray(0x1e2, 0x200))).not.toEqual(items.slice(2));
+    // bank 1's entries take color math (the result screens darken them with the wrestlers)
+    const banked = Array.from(g.m.oamx).filter((v) => v & 1);
+    expect(banked.length).toBeGreaterThan(0);
+    expect(banked.every((v) => v & 0x10)).toBe(true);
     const classic = fight(classicRules);
     expect(classic.m.objx.every((v) => v === 0)).toBe(true);
     expect(classic.m.oamx.every((v) => v === 0)).toBe(true);

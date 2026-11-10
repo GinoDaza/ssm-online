@@ -21,6 +21,7 @@ import { installReferee } from './referee.ts';
 import { chosenSize, extraChars, installTeams } from './teams.ts';
 import { installSelect } from './select.ts';
 import { installHud } from './hud.ts';
+import { installRopes } from './ropes.ts';
 import { installSprites } from './sprites.ts';
 import { installWide, marginOf, setTall } from './wide.ts';
 import type { Ruleset } from './ruleset.ts';
@@ -137,6 +138,7 @@ export function installRules(game: Game, rules: Ruleset): void {
     if (rules.wideMenus || rules.modeMenu) installMenus(r);
     installCountOut(r);
     installWide(r);
+    installRopes(r);
   }
   if (rules.modeMenu) installMenu(r);
   // 3 vs 3 and 4 vs 4 (the menu's choice), in the full arena

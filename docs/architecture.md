@@ -78,7 +78,13 @@ unchanged (checked to the clock against the emulator). Besides the sites:
   fourth wrestler). The objects that draw singles graphics use it: items, side ropes 22 / 24,
   combat effects 3C (their floor-impact frames would otherwise show team play's letters). The
   flags stay while the arena objects exist (a paused game re-uploads the same OAM) and are
-  cleared at C00369 once the pool no longer has them, so menus never inherit them.
+  cleared at C00369 once the pool no longer has them, so menus never inherit them. Bank-1
+  entries also take color math whatever their palette (`oamx` bit 4; the SNES gives it only to
+  palettes 4-7), so the side ropes darken with the wrestlers on the result screens.
+- Side ropes (`rules/src/ropes.ts`): the two side ropes 22 share one place for their shake frame
+  (VRAM DC00, `$1A79`); the SNES screen never shows both, the wide one does, and the right
+  one's upload would give the left one its tiles. On the wide picture the left rope's frame is
+  copied to the other half of bank 1 instead (`oamx` bits 0 and 3), in singles too.
 - Standing with an item (C1A569 / C1A594): team play fixes the standing pose; with an item in
   hand the singles pose selection runs, which picks the pose holding it.
 - Count-out (`rules/src/countout.ts`): team play has no referee, so the count runs without one,

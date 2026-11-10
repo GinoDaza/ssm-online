@@ -2,16 +2,6 @@
 
 Bugs that are understood but not fixed yet, with their cause and the planned fix.
 
-## 2 vs 2 in the full arena
-
-- **Results screen: the side ropes stay bright.** The results screen darkens the picture with
-  color math (subtracting the fixed color), and the SNES never applies color math to sprites
-  with palettes 0-3. The team wrestlers use palettes 4-7 and darken; the objects drawn from the
-  second sprite bank (side ropes, apron edges, items: `sprites.ts`) use palettes 0 and 1 and do
-  not. Fix: in `render.ts` (`compose`), treat second-bank sprites as color-math sprites. During
-  play the fixed color is 0, so only the results screen (and any flash) changes. Not checked:
-  whether the singles results screen shows the same in the original.
-
 ## 3 vs 3 and 4 vs 4
 
 - **The extra wrestlers' sprites flicker and look slightly wrong** (seen in play; it works, but
@@ -49,16 +39,3 @@ Bugs that are understood but not fixed yet, with their cause and the planned fix
   down from line `HUD_BOTTOM` (201, `wide.ts`), measured on the team HUD; the singles labels
   start above that line, so their top rows stay and the rest drops 6 lines. Fix: take the
   band's start from the singles HUD too (or move whole BG3 rows), then check both HUDs.
-
-## Possibly the original's
-
-- **Left side ropes: broken pieces while they shake.** When a wrestler hits the ropes on either
-  side, the whole ring shakes and both side ropes keep shaking for a few frames. Only the
-  left side ropes then show it wrong: short red, white and blue fragments come loose from the
-  ropes (by the lowest turnbuckle, and along the ropes), and some stay there while the game is
-  paused. The right side looks right. Seen in 1 vs 1 in the full arena, wide picture.
-  Plausible: the original draws it too (the side ropes are sprite pieces, objects 22 / 24).
-  Also possible, ours: on the wide picture the left side ropes lie left of the SNES screen, so
-  their pieces go through the wide sprite x (`oamWideX`, `wide.ts`), and the shake moves them
-  across that edge. Not checked against the emulator (a classic match: does the left side
-  break while it shakes?). Visual only.

@@ -19,6 +19,8 @@
  * set, VRAM writes into the sprite tables go to bank 1 instead of VRAM, with bit 5 to bank 2.
  * An OAM entry whose `oamx` byte has bit 0 (bank 1) or bit 2 (bank 2) takes its tiles from that
  * bank, and its colors from the bank's own sprite palettes (`cgramx`: bank 1, then bank 2).
+ * Bit 3 takes a banked entry's tiles from the bank's other half (the name's bit 8 inverted);
+ * bit 4 gives the entry color math whatever its palette (the SNES: palettes 4-7 only).
  * Modes set `oamxNext` while the frame builds the OAM; a DMA of the whole OAM commits it to
  * `oamx`, so the flags change with the entries they describe.
  *

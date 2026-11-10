@@ -30,6 +30,7 @@
 import { OBJX_BANK2, rtl, type Machine, type Runner } from '@ssm/core';
 import { oamIndex, oamPassStart } from './oamext.ts';
 import { EXT, EXTRA, bigTeams, extras, isExtra, rd16, setTeamSize } from './slots.ts';
+import { isLeftRope } from './ropes.ts';
 import { setTall } from './wide.ts';
 
 const TEAM_FLAG = 0x1ba0;
@@ -44,6 +45,13 @@ const TEAM_TAGS = [0xc000, 0xd000] as const;
 const SINGLES_STREAM = [0xd000, 0xe000] as const;
 /** pool types that draw singles graphics */
 const SINGLES_GRAPHICS = new Set([0x22, 0x24, 0x3c]);
+/**
+ * `oamx` bit 4, color math whatever the palette: the team result screens darken the picture
+ * with color math, which the SNES never gives sprite palettes 0-3. The team arena's own ropes
+ * are BG tiles and darken; the singles objects here use palettes 0 and 1 (the side ropes),
+ * so they darken with the team wrestlers. During play the fixed color is 0: no change.
+ */
+const MATH = 0x10;
 
 
 interface Entry {
@@ -168,11 +176,12 @@ export function installSprites(r: Runner, menus?: (c: Machine) => void): void {
   });
 
   // the drawing pass C1F5A2 starts with no flags; then each drawer's entries, from $F4 on, are
-  // its object's until the next object starts (singles: never flagged)
+  // its object's until the next object starts (singles: only the wide picture's left side rope)
   r.split(0xc1f5a4);
   r.override(0xc1f5a2, (c) => {
     c.oamxNext.fill(0);
     oamPassStart(c);
+    if (!isTeam(c) && c.wide) c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[0] + 0x100), 0);
     if (isTeam(c)) {
       c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[1]), 0);
       // bank 2 (the extra wrestlers): the game's palettes, 4-7 the extras' own
@@ -185,14 +194,16 @@ export function installSprites(r: Runner, menus?: (c: Machine) => void): void {
     r.split(drawer + 2);
     r.override(drawer, (c) => {
       const d = c.x;
-      const bank = !isTeam(c)
+      let flags = !isTeam(c)
         ? 0
         : isExtra(d)
           ? 4 // an extra wrestler or its companion piece (+1C9)
           : (d >= 0x1000 && d < 0x1200) || (d >= 0x1200 && d < 0x1a00 && SINGLES_GRAPHICS.has(c.wram[d + 1]!))
-            ? 1
+            ? 1 | MATH
             : 0;
-      c.oamxNext.fill(bank, oamIndex(c));
+      // the left side rope's frame, in bank 1's other half (ropes.ts)
+      if (isLeftRope(c, d)) flags |= 1 | 8;
+      c.oamxNext.fill(flags, oamIndex(c));
       return r.original(c, drawer);
     });
   }

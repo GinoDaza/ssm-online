@@ -46,6 +46,49 @@ describe.skipIf(!haveRom())('singles in the full arena: the wide picture', () =>
     expect(worst).toBeLessThanOrEqual(0);
   }, 120_000);
 
+  it('full arena: each side rope shows its own shake frame', () => {
+    const g = singles(teamArenaRules);
+    const m = g.m;
+    const rope = (arg: number) => {
+      for (let d = 0x1200; d < 0x1a00; d += 0x40) if (m.wram[d + 1] === 0x22 && m.wram[d + 2] === arg) return d;
+      throw new Error('no side rope');
+    };
+    // which object drew each OAM entry
+    const owner = new Int32Array(128).fill(-1);
+    for (const pc of [0xc1f6c7, 0xc1f74c, 0xc1f7bb]) {
+      const prev = g.runner.overrides.get(pc)!;
+      g.runner.override(pc, (c) => {
+        owner.fill(c.x, c.wram[0xf4]! & 0x7f);
+        return prev(c);
+      });
+    }
+    const left = rope(0);
+    let checked = 0;
+    for (let f = 0; f < 450 && checked < 20; f++) {
+      g.step([PAD.LEFT, 0, 0, 0]);
+      const frame = m.wram[left + 0x1f]!;
+      // the left rope shakes and the right one uploaded another frame to the shared place
+      if (m.wram[0x1a79] === frame) continue;
+      // its frame's graphics queue record (C00A8C): C5:word[C5:word[C0:D530] + 2 * frame]
+      const u16 = (a: number) => m.rom.u8(a) | (m.rom.u8(a + 1) << 8);
+      const rec = 0xc50000 | u16(0xc50000 | (u16(0xc0d530) + 2 * frame));
+      const src = u16(rec + 3);
+      expect(m.rom.u8(rec + 5), 'from WRAM').toBe(0x7e);
+      expect((u16(rec + 6) << 1) & 0xffff, 'to DC00').toBe(0xdc00);
+      const tiles = m.wram.subarray(src, src + u16(rec + 1));
+      expect(Array.from(m.objx.subarray(0x3c00, 0x3f80))).toEqual(Array.from(tiles));
+      let entries = 0;
+      for (let e = 0; e < 128; e++) {
+        if (owner[e] !== left) continue;
+        expect(m.oamxNext[e]! & 9, `entry ${e}: bank 1, other half`).toBe(9);
+        entries++;
+      }
+      expect(entries).toBeGreaterThan(0);
+      checked++;
+    }
+    expect(checked, 'frames with the left rope shaking alone').toBeGreaterThan(0);
+  }, 120_000);
+
   it('classic: the SNES picture', () => {
     const g = singles(classicRules);
     expect(g.m.wide).toBe(0);

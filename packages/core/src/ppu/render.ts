@@ -124,6 +124,8 @@ export class Renderer {
   /** this line's sprite pixels: CGRAM index (0 = none) and priority */
   private readonly objColor: Uint16Array;
   private readonly objPrio: Uint8Array;
+  /** this line's sprite pixels that take color math whatever their palette (oamx bit 4) */
+  private readonly objMath: Uint8Array;
   /** drawing mode of each layer at each x of this line (see windows()) */
   private readonly modes: Uint8Array;
   private readonly spriteList = new Int16Array(512);
@@ -145,6 +147,7 @@ export class Renderer {
     this.depth = new Uint8Array(width);
     this.objColor = new Uint16Array(width);
     this.objPrio = new Uint8Array(width);
+    this.objMath = new Uint8Array(width);
     this.modes = new Uint8Array(6 * width);
   }
 
@@ -517,7 +520,9 @@ export class Renderer {
       const bankNo = flags & 1 ? 1 : flags & 4 ? 2 : 0;
       const bank = bankNo ? m.objx : null;
       const bankAt = bankNo === 2 ? OBJX_BANK2 : 0;
-      const name = tb[4 * e + 2]! | ((attr & 1) << 8);
+      // bit 3: the other half of the bank's tiles (the name's bit 8 inverted)
+      const name = (tb[4 * e + 2]! | ((attr & 1) << 8)) ^ (bank && flags & 8 ? 0x100 : 0);
+      const math = flags & 0x10 ? 1 : 0;
       const hflip = (attr & 0x40) !== 0;
       const rowTile = (((line << 1) + (name & 0xf0)) & 0xf0) | (name & 0x100);
       let tileX = name & 0x0f;
@@ -557,6 +562,7 @@ export class Renderer {
           if (c === 0) continue;
           this.objColor[sx] = pal + c;
           this.objPrio[sx] = prio;
+          this.objMath[sx] = math;
         }
       }
     }
@@ -585,7 +591,7 @@ export class Renderer {
       const clip = (md & 1) === 0;
       const main = clip ? 0 : this.pal[this.color[x]!]!;
       let out = main;
-      const math = (cgadsub & (1 << layer)) !== 0 && (md & 2) !== 0 && (layer !== OBJ || (this.color[x]! & 0x7f) >= 64); // sprite palettes 4-7
+      const math = (cgadsub & (1 << layer)) !== 0 && (md & 2) !== 0 && (layer !== OBJ || (this.color[x]! & 0x7f) >= 64 || this.objMath[x] !== 0); // sprite palettes 4-7, or flagged
       if (math) {
         if (viaSub || op === Op.ADD || op === Op.SUB || op === Op.ADD_CAPPED) {
           // whole: plain, or the subscreen-half path with no subscreen pixel
