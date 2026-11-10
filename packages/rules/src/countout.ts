@@ -8,7 +8,9 @@
  * - each second of the match clock (C06214) while an active wrestler stands outside (+152, the
  *   wrestler's own flag the singles referee reads), `$1A60` (the singles count, unused in team
  *   play) goes up and its digit shows; with nobody outside it goes back to 0 and the banner is
- *   cleared;
+ *   cleared: the band off (`$0602` = 0, as C10000's request 00) and the digits blanked with ring
+ *   entry 60 (entry 06 is not a clear: it draws the pin banner's "PIN" there, which the band of
+ *   the "x:xx PASSED" message, `$E9` bit 7, would then show);
  * - at 20, a team with a member outside loses: its members left (`$1A16` / `$1A17`) go to 0, so
  *   the team referee ends the round as after a last pin fall (C10AE5: winner `$1C89`). The
  *   losers are marked like the time-over judge does (+00 = 1, +D1 = 0; the result flow reads
@@ -31,6 +33,8 @@ const NO_CONTEST = 0x1a64;
 const PIN_FALL = 0x1a61;
 const MEMBERS_LEFT = [0x1a16, 0x1a17] as const;
 const LIMIT = 20;
+/** graphics ring entry: the count banner's five BG3 rows blank */
+const BLANK = 0x60;
 /** the fight state of `$56`, and `$5F` (a round end is pending when nonzero) */
 const FIGHT = 0x1a;
 
@@ -71,7 +75,9 @@ function tick(c: Machine): void {
   if (!out[0] && !out[1]) {
     if (w[COUNT]) {
       w[COUNT] = 0;
-      pose(c, 0x06);
+      w[0x602] = 0;
+      w[0x603] = 0;
+      pose(c, BLANK);
     }
     return;
   }

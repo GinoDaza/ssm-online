@@ -44,7 +44,15 @@ describe.skipIf(!haveRom())('team matches in the singles arena: play', () => {
       lowest = Math.max(lowest, w16(g, 0x1a8d));
       count = Math.max(count, g.m.wram[0x1a60]!);
     }
-    return { results: bot.results, cameraY: lowest, count, countNow: g.m.wram[0x1a60]! };
+    for (let f = 0; f < 10; f++) g.step([0, 0, 0, 0]); // the ring's uploads
+    // the count banner's BG3 rows (right half, rows 11-15, columns 12-19): no tile left
+    const banner: number[] = [];
+    for (let row = 11; row <= 15; row++)
+      for (let col = 12; col <= 19; col++) {
+        const a = (0x5000 + 32 * row + col) * 2;
+        banner.push((g.m.vram[a]! | (g.m.vram[a + 1]! << 8)) & 0x3ff);
+      }
+    return { results: bot.results, cameraY: lowest, count, countNow: g.m.wram[0x1a60]!, band: w16(g, 0x602), banner };
   };
 
   it('classic: the ropes hold and the camera stays on the ring', () => {
@@ -62,6 +70,10 @@ describe.skipIf(!haveRom())('team matches in the singles arena: play', () => {
     expect(r.count).toBeGreaterThanOrEqual(3);
     expect(r.count).toBeLessThan(20);
     expect(r.countNow).toBe(0);
+    // and the banner is cleared: the band off, the digits blank (entry 06 would leave the pin
+    // banner's "PIN" there, which the "x:xx PASSED" message's band then shows)
+    expect(r.band).toBe(0);
+    expect(r.banner.filter((t) => t !== 0)).toEqual([]);
   }, 60_000);
 
   it('full arena: 20 seconds outside is a count out, his team loses', () => {
