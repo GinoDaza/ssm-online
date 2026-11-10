@@ -38,9 +38,10 @@ export const EXT = {
 
 /**
  * Machine.rulesBytes: the extras' picks (select.ts: cursor + 1, two a side), players 5-8
- * (players.ts: who joined, their pads last frame, their select cursors + 1).
+ * (players.ts: who joined, their pads last frame, their select cursors + 1), the session's
+ * team size (seats.ts).
  */
-export const RULES_BYTES = { PICKS: 0, JOINED: 4, LAST_PADS: 6, CURSORS: 14 } as const;
+export const RULES_BYTES = { PICKS: 0, JOINED: 4, LAST_PADS: 6, CURSORS: 14, PRESET: 18 } as const;
 
 /** rulesWord bits 8-9: the team size of the match now on, less 2 (menu.ts owns bits 0-2) */
 const SIZE_SHIFT = 8;

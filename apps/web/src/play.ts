@@ -4,7 +4,7 @@
  * which may re-simulate frames (the renderer and the sound are detached meanwhile).
  */
 import { Game, HEIGHT, Netplay, Renderer, RomImage, Sound } from '@ssm/core';
-import { installRules, type Ruleset } from '@ssm/rules';
+import { installRules, presetTeamSize, type Ruleset } from '@ssm/rules';
 import { Speaker } from './audio.ts';
 import { Controls } from './input.ts';
 import type { Room } from './room.ts';
@@ -13,8 +13,11 @@ const FRAME_MS = 1000 / 60;
 
 export interface Online {
   room: Room;
-  players: number;
+  /** the session slots in play (the seated players' pads), and the local one */
+  slots: number[];
   slot: number;
+  /** wrestlers a team, the lobby's (the Game Mode Select comes up on it) */
+  size: number;
   delay: number;
 }
 
@@ -46,10 +49,11 @@ export function play(canvas: HTMLCanvasElement, rom: Uint8Array, rules: Ruleset,
   // a multitap in port 2, as on the console: pads 3 and 4 play when a third or fourth player
   // is there (online slots 3-4, more gamepads); pads nobody holds read 0
   game.m.multitap = true;
+  if (online && rules.modeMenu) presetTeamSize(game.m, online.size);
 
   let net: Netplay | null = null;
   if (online) {
-    net = new Netplay(game, { players: online.players, slot: online.slot, delay: online.delay });
+    net = new Netplay(game, { slots: online.slots, slot: online.slot, delay: online.delay });
     net.send = (data) => online.room.sendBinary(data);
     online.room.onBinary = (data) => net!.receive(data);
     net.session.onResim = (active) => {

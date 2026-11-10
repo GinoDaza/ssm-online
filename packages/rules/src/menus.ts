@@ -19,7 +19,8 @@
  * extra players' boxes too, in the HUD panels (Machine.hudx) of the margins: the original's
  * four 8 x 11 tile boxes (BG3 rows 17-27, one a player in palettes 0-3: 1P orange, 2P blue,
  * 3P yellow, 4P green) get 5P left and 6P right of them, 7P and 8P above those (rows 5-15),
- * in the panels' own palettes. Their inside is the inside of an original box still waiting for
+ * in the panels' own palettes; all eight are labelled by seat (seats.ts: team by team, P1-P3
+ * against P4-P6 in 3 VS 3) instead of by pad. Their inside is the inside of an original box still waiting for
  * its player (`$1BA6`[pad] = 0; PRESS START, blinking as it does), or, once the player joined
  * (players.ts), of one whose player did (ENTRY ACCEPTED).
  */
@@ -27,6 +28,7 @@ import { HUDX_COLS, HUDX_ROWS, MARGIN_SPRITES, MARGIN_WORDS, Margin, type Machin
 import { chosenTeamSize } from './menu.ts';
 import { cursorCharacter, picks } from './select.ts';
 import { joined, playerCursor } from './players.ts';
+import { playerNumber } from './seats.ts';
 
 const LOAD_LIST = 0xc00643;
 /** rulesWord bits 16-23: the last VRAM list loaded */
@@ -145,7 +147,7 @@ function pickedNames(c: Machine, n: number): void {
       if (cursor < 0) return;
       // the name under a cursor blinks; the number stays
       const blink = pick < 0 && (c.wram[FRAMES]! & 0x10) !== 0;
-      const label = human ? `${5 + e}P ` : '';
+      const label = human ? `${playerNumber(n + 2, 4 + e)}P ` : '';
       const name = label + nameOf(c, cursorCharacter(c, cursor));
       const row = NAME_ROWS[k]! - NAME_ROWS[0]!;
       const col = side === 0 ? Math.max(0, HUDX_COLS - 1 - name.length) : Math.min(1, HUDX_COLS - name.length);
@@ -162,6 +164,8 @@ function pickedNames(c: Machine, n: number): void {
 const BOX_TOP = 17;
 const BOX_ROWS = 11;
 const BOX_COLS = 8;
+/** WRAM the boxes' BG3 rows come from (C032DB's cells), from row BOX_TOP */
+const BOX_BUFFER = 0x2000;
 /** the panels' rows start at the top boxes' (BG3 row 5), the bottom ones are 12 rows down */
 const PANEL_ROW = 5;
 const LOW_BOXES = BOX_TOP - PANEL_ROW;
@@ -192,8 +196,9 @@ function panelPut(c: Machine, panel: number, row: number, col: number, v: number
   c.hudxMap[a + 1] = v >> 8;
 }
 
-/** The boxes of the extra players 5P .. 4 + n. */
+/** The boxes of the extra players 5P .. 4 + n; every box labelled with its seat's number. */
 function extraBoxes(c: Machine, n: number): void {
+  const size = n / 2 + 2;
   const w = c.wram;
   const map = (c.ioreg[0x09]! & 0xfc) << 9;
   const bg3 = (row: number, col: number) => c.vram[map + 2 * (row * 32 + col)]! | (c.vram[map + 2 * (row * 32 + col) + 1]! << 8);
@@ -203,6 +208,10 @@ function extraBoxes(c: Machine, n: number): void {
   for (let k = 0; k < 4; k++) {
     if (w[ENTRY_STATE + k] === 0) waiting = k;
     else if (entered < 0) entered = k;
+    // the original box's label digit (row BOX_TOP, column 3 of the box): the pad's seat
+    // number. The boxes' rows are DMA'd from a WRAM buffer (BOX_BUFFER: row BOX_TOP first).
+    const a = BOX_BUFFER + 2 * (BOX_COLS * k + 3);
+    if (w[a]! >= 0x31 && w[a]! <= 0x38) w[a] = (DIGIT0 + playerNumber(size, k)) & 0xff;
   }
   c.hudxMap.fill(0);
   c.hudxRow = PANEL_ROW;
@@ -227,7 +236,7 @@ function extraBoxes(c: Machine, n: number): void {
       put(0, col, TOP_EDGE | pal);
       put(BOX_ROWS - 1, col, BOTTOM_EDGE | pal);
     }
-    put(0, 3, (DIGIT0 + 5 + e) | pal);
+    put(0, 3, (DIGIT0 + playerNumber(size, 4 + e)) | pal);
     put(0, 4, LETTER_P | pal);
     const inside = joined(c, e) ? entered : waiting;
     for (let row = 1; row < BOX_ROWS - 1; row++) {

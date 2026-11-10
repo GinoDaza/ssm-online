@@ -21,7 +21,9 @@ import { checksum } from '../cpu/machine.ts';
 
 export interface RollbackOptions {
   /** pad slots in play (1-8): slots 0..players-1; the others hold 0 */
-  players: number;
+  players?: number;
+  /** or the slots in play, in any order and with gaps (one peer each): the others hold 0 */
+  slots?: readonly number[];
   /** the deepest rollback, in frames (default 8) */
   maxRollback?: number;
   /** frames between desync checksums (default 60) */
@@ -35,8 +37,17 @@ export const SLOTS = 8;
 /** the word of Game.step a slot fills: pads 1-4, then (after pad 5) players 5-8 */
 const STEP_WORD = [0, 1, 2, 3, 5, 6, 7, 8] as const;
 
+/** The slots in play of a session's options: `slots`, or 0..players-1. */
+export function slotsOf(opts: { players?: number; slots?: readonly number[] }): number[] {
+  const slots = opts.slots ? [...new Set(opts.slots)].sort((a, b) => a - b) : Array.from({ length: opts.players ?? 0 }, (_, s) => s);
+  if (slots.length < 1 || slots.some((s) => s < 0 || s >= SLOTS || !Number.isInteger(s))) throw new Error(`slots in play: 1-${SLOTS} of 0-${SLOTS - 1}`);
+  return slots;
+}
+
 export class Rollback {
   readonly game: Game;
+  /** the slots in play (ascending) and how many */
+  readonly slots: readonly number[];
   readonly players: number;
   readonly maxRollback: number;
   readonly checksumEvery: number;
@@ -56,6 +67,7 @@ export class Rollback {
   private readonly used = new Uint16Array(RING * SLOTS);
   /** per slot: the inputs of the frames before this one are known */
   private readonly known = new Int32Array(SLOTS);
+  private readonly inPlay = new Uint8Array(SLOTS);
   /** snaps[f % length]: the state at the start of frame f */
   private readonly snaps: Uint8Array[];
   private readonly pads = new Uint16Array(9);
@@ -65,18 +77,19 @@ export class Rollback {
 
   constructor(game: Game, opts: RollbackOptions) {
     this.game = game;
-    this.players = opts.players;
+    this.slots = slotsOf(opts);
+    this.players = this.slots.length;
     this.maxRollback = opts.maxRollback ?? 8;
     this.checksumEvery = opts.checksumEvery ?? 60;
-    if (opts.players < 1 || opts.players > SLOTS) throw new Error(`players: 1-${SLOTS}`);
-    for (let s = opts.players; s < SLOTS; s++) this.known[s] = 0x7fffffff;
+    for (const s of this.slots) this.inPlay[s] = 1;
+    for (let s = 0; s < SLOTS; s++) if (!this.inPlay[s]) this.known[s] = 0x7fffffff;
     this.snaps = Array.from({ length: this.maxRollback + 1 }, () => new Uint8Array(game.m.stateSize));
   }
 
   /** Frames before this one have the inputs of every slot. */
   get confirmed(): number {
-    let c = this.known[0]!;
-    for (let s = 1; s < this.players; s++) c = Math.min(c, this.known[s]!);
+    let c = 0x7fffffff;
+    for (const s of this.slots) c = Math.min(c, this.known[s]!);
     return c;
   }
 
@@ -133,7 +146,7 @@ export class Rollback {
     const base = (f & (RING - 1)) * SLOTS;
     for (let s = 0; s < SLOTS; s++) {
       const k = this.known[s]!;
-      const pad = s >= this.players ? 0 : f < k ? this.inputs[base + s]! : k > 0 ? this.inputs[((k - 1) & (RING - 1)) * SLOTS + s]! : 0;
+      const pad = !this.inPlay[s] ? 0 : f < k ? this.inputs[base + s]! : k > 0 ? this.inputs[((k - 1) & (RING - 1)) * SLOTS + s]! : 0;
       this.used[base + s] = pad;
       this.pads[STEP_WORD[s]!] = pad;
     }

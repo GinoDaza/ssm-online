@@ -22,12 +22,12 @@ interface Run {
  * Peer p starts at tick starts[p]; a message sent at tick t reaches the others at tick
  * t + latency(t) but never before the one sent earlier (a TCP relay).
  */
-function play(players: number, ticks: number, starts: number[], latency: (t: number) => number, corrupt?: (t: number, peers: Netplay[]) => void, setup?: (g: Game) => void): Run {
-  const peers = Array.from({ length: players }, (_, slot) => {
+function play(players: number, ticks: number, starts: number[], latency: (t: number) => number, corrupt?: (t: number, peers: Netplay[]) => void, setup?: (g: Game) => void, slots?: number[]): Run {
+  const peers = Array.from({ length: players }, (_, p) => {
     const g = new Game(loadRom());
     setup?.(g);
     g.powerOn();
-    return new Netplay(g, { players, slot, delay: 2, checksumEvery: 30 });
+    return new Netplay(g, slots ? { slots, slot: slots[p]!, delay: 2, checksumEvery: 30 } : { players, slot: p, delay: 2, checksumEvery: 30 });
   });
   const sums = peers.map(() => new Map<number, number>());
   const wire: { at: number; to: number; data: Uint8Array }[] = [];
@@ -98,6 +98,21 @@ describe.skipIf(!haveRom())('netplay', () => {
     expect(w[0x1ff1], 'player 6').not.toBe(0);
     expect(w[0x1ff2], 'player 7: none').toBe(0);
   }, 180_000);
+
+  it('slots with gaps (pads 1 and 3, player 6): every checksum agrees', () => {
+    const fold = (g: Game) =>
+      g.runner.override(0xc00369, (c) => {
+        c.wram[0x1ff0] = (c.wram[0x1ff0]! * 31 + (c.padsx[1]! >> 4)) & 0xff;
+        return g.runner.original(c, 0xc00369);
+      });
+    const { peers, sums } = play(3, 400, [0, 3, 1], (t) => 2 + ((t * 5) % 3), undefined, fold, [0, 2, 5]);
+    for (const n of peers) expect(n.desync).toBe(-1);
+    const common = [...sums[0]!.keys()].filter((f) => sums.every((m) => m.has(f)));
+    expect(common.length).toBeGreaterThan(5);
+    for (const f of common) for (const m of sums) expect(m.get(f), `frame ${f}`).toBe(sums[0]!.get(f));
+    // pad 3 is the second peer's (SNES pad 3, with the multitap), player 6 the third's
+    expect(peers[0]!.session.game.m.wram[0x1ff0]).not.toBe(0);
+  }, 120_000);
 
   it('detects a desync', () => {
     const { peers } = play(2, 300, [0, 0], () => 2, (t, peers) => {

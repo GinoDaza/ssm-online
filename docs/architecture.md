@@ -254,9 +254,14 @@ different times through a simulated relay. A session has up to eight slots: pads
 players 5-8 of 3 vs 3 / 4 vs 4 (`Machine.padsx`).
 
 In the browser (`apps/web`), a room is a name on the server: the peer that joined first is
-the host, picks the input delay and starts; its `start` message fixes the slots (join order,
-up to eight; the host can move players between the teams: pads 1, 2 and players 5, 7 against
-pads 3, 4 and players 6, 8) for everyone. Transport: the server's WebSocket relay (LAN / VPN now, a cloud
+the host, picks the team size, the input delay and starts; its `start` message fixes the
+seats for everyone. A seat is a team and a place (`rules/src/seats.ts`): players are numbered
+team by team (P1-P3 against P4-P6 in 3 VS 3), and each seat is a pad (team 1: pads 1, 2 and
+players 5, 7; team 2: pads 3, 4 and players 6, 8, since the multitap's Team Battle Royal puts
+pads 1 and 2 together), so empty seats are the CPU and two friends can sit on opposite teams.
+A session's slots may have gaps (`Rollback` / `Netplay` `slots`). The game starts with the
+lobby's team size offered first on the Game Mode Select (`presetTeamSize`), and the team
+entry labels its boxes with the seats' numbers. Transport: the server's WebSocket relay (LAN / VPN now, a cloud
 server later).
 
 ## Picture and sound

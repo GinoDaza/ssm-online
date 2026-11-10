@@ -4,7 +4,7 @@ import { PLAYABLE_RULES, rulesById, type Ruleset } from '@ssm/rules';
 import { Fit, useGameScale } from './Fit.tsx';
 import { KEY_HELP } from './input.ts';
 import { play, type Online } from './play.ts';
-import { MAX_PLAYERS, Room, TEAMS } from './room.ts';
+import { MAX_PLAYERS, Room, TEAM_SEATS } from './room.ts';
 
 type Screen = { kind: 'menu' } | { kind: 'room'; room: Room } | { kind: 'game'; online: Online | null; rules: Ruleset };
 
@@ -186,7 +186,7 @@ function Lobby({ room, rules, setRules, onStart, onBack }: RulesProps & { room: 
   const [closed, setClosed] = useState(false);
   const [delay, setDelay] = useState(Number(params.get('delay') ?? 2));
   const [copied, setCopied] = useState(false);
-  /** host: the slot picked to swap with one of the other team */
+  /** host: the seat picked to move to another */
   const [picked, setPicked] = useState<number | null>(null);
   const copyInvite = () => {
     const link = `${location.origin}/?room=${encodeURIComponent(room.code)}`;
@@ -198,45 +198,55 @@ function Lobby({ room, rules, setRules, onStart, onBack }: RulesProps & { room: 
 
   useEffect(() => {
     room.onChange = () => {
-      setPicked(null); // the slots may have moved
+      setPicked(null); // the seats may have moved
       redraw((n) => n + 1);
     };
     room.onClose = () => setClosed(true);
     room.onStart = (msg) => {
-      const slot = msg.players.indexOf(room.me);
-      if (slot < 0) return; // the room was full: stay in the lobby
-      onStart({ room, players: msg.players.length, slot, delay: msg.delay }, rulesById(msg.rules));
+      const mine = msg.players.find((p) => p.peer === room.me);
+      if (!mine) return; // no seat: stay in the lobby
+      onStart({ room, slots: msg.players.map((p) => p.slot), slot: mine.slot, size: msg.size, delay: msg.delay }, rulesById(msg.rules));
     };
     const t = setInterval(() => redraw((n) => n + 1), 1000); // ping
     return () => clearInterval(t);
   }, [room, onStart]);
 
+  // 3 VS 3 and 4 VS 4 are the Game Mode Select's (Ruleset.modeMenu)
+  useEffect(() => {
+    if (room.isHost && !rules.modeMenu && room.size > 2) room.setSize(2);
+  }, [room, rules]);
+
   if (closed) return <section className="panel"><p>Lost the connection to the server.</p><button onClick={onBack}>Back</button></section>;
+  const sizes = rules.modeMenu ? [1, 2, 3, 4] : [1, 2];
   return (
     <section className="panel">
       <h1>Room {room.code || '…'}</h1>
+      <div className="row">
+        {room.isHost ? (
+          <label className="row">
+            Match
+            <select value={room.size} onChange={(e) => room.setSize(Number(e.target.value))}>
+              {sizes.map((n) => <option key={n} value={n}>{n} VS {n}</option>)}
+            </select>
+          </label>
+        ) : (
+          <p>{room.size} VS {room.size}</p>
+        )}
+      </div>
       <div className="teams">
         {[0, 1].map((team) => (
           <div key={team} className={`team-box team-${team}`}>
             <h2>Team {team + 1}</h2>
-            {TEAMS[team]!.map((k) => {
-              const m = room.ordered[k];
-              if (!m) return <p key={k} className="help">P{k + 1} · CPU</p>;
-              const others = TEAMS[1 - team]!.filter((j) => room.ordered[j]);
+            {room.open.filter((s) => Math.floor(s / TEAM_SEATS) === team).map((s) => {
+              const m = room.seated(s);
               return (
-                <p key={k} className={picked === k ? 'picked' : ''}>
+                <p key={s} className={picked === s ? 'picked' : m ? '' : 'help'}>
                   <span>
-                    P{k + 1} {m.name} {m.peer === room.me && '(you)'} {m.peer === room.members[0]?.peer && '· host'}
+                    P{room.number(s)} {m ? m.name : 'CPU'} {m?.peer === room.me && '(you)'} {m && m.peer === room.members[0]?.peer && '· host'}
                   </span>
-                  {room.isHost && picked === null && others.length > 0 && (
-                    <button onClick={() => (others.length === 1 ? room.swap(k, others[0]!) : setPicked(k))}>
-                      {team ? '← Team 1' : 'Team 2 →'}
-                    </button>
-                  )}
-                  {room.isHost && picked !== null && !(TEAMS[team] as readonly number[]).includes(picked) && (
-                    <button onClick={() => (room.swap(picked, k), setPicked(null))}>Swap</button>
-                  )}
-                  {room.isHost && picked === k && <button onClick={() => setPicked(null)}>Cancel</button>}
+                  {room.isHost && picked === null && m && <button onClick={() => setPicked(s)}>Move</button>}
+                  {room.isHost && picked !== null && picked !== s && <button onClick={() => (room.swap(picked, s), setPicked(null))}>{m ? 'Swap' : 'Here'}</button>}
+                  {room.isHost && picked === s && <button onClick={() => setPicked(null)}>Cancel</button>}
                 </p>
               );
             })}
@@ -248,10 +258,10 @@ function Lobby({ room, rules, setRules, onStart, onBack }: RulesProps & { room: 
           <button onClick={() => (setPicked(null), room.shuffle())}>Random teams</button>
         </div>
       )}
-      {room.ordered.length > MAX_PLAYERS && <p className="help">Watching (room full): {room.ordered.slice(MAX_PLAYERS).map((m) => m.name).join(', ')}</p>}
+      {room.watching.length > 0 && <p className="help">Watching: {room.watching.map((m) => m.name).join(', ')}</p>}
       <p className="help">Friends join with the same room name · ping {room.ping} ms</p>
       <p className="help">
-        Up to 8 players. Team Battle Royal: P1-P4 play 2 VS 2 and up; P5-P8 play the extra wrestlers of 3 VS 3 and 4 VS 4 (P5, P6 from 3 VS 3, P7, P8 in 4 VS 4). P2-P4 join by pressing Start on the Game Mode Select or on ENTER THE MATCH, P5-P8 on ENTER THE MATCH; P5-P8 then pick their wrestler beside the player select. In a single match P1 fights P2.
+        Up to {MAX_PLAYERS} players; empty seats are the CPU. P1 drives the menus. In the game everyone else joins by pressing Start (on the Game Mode Select or on ENTER THE MATCH); in 3 VS 3 and 4 VS 4 the third and fourth of a team then pick their wrestler beside the player select.
       </p>
       {room.isHost ? (
         <div className="row">
@@ -262,7 +272,7 @@ function Lobby({ room, rules, setRules, onStart, onBack }: RulesProps & { room: 
               {[0, 1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>{d} {d === 2 ? '(LAN)' : d === 3 ? '(internet)' : ''}</option>)}
             </select>
           </label>
-          <button disabled={room.members.length < 2} onClick={() => room.start(delay, rules.id)}>Start</button>
+          <button disabled={!room.ready} onClick={() => room.start(delay, rules.id)}>Start</button>
         </div>
       ) : (
         <p>Waiting for the host to start…</p>

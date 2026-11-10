@@ -76,23 +76,23 @@ describe.skipIf(!haveRom())('the menus in the wide picture', () => {
     expect(wallpaper).toBe(24 * HEIGHT);
   }, 120_000);
 
-  it('the entry of a 3 VS 3 / 4 VS 4: the boxes of 5P-6P / 5P-8P in the margins', () => {
-    /** the label digits of the panels' boxes (BG3 tiles 30 + n), panel by panel */
+  it('the entry of a 3 VS 3 / 4 VS 4: the extra players\' boxes in the margins, numbered by seat', () => {
+    /** the label digits of the panels' boxes (BG3 tiles 30 + n), panel by panel, top first */
     const labels = (shot: Shot) =>
       [0, 1].map((panel) => {
         const out: number[] = [];
         for (let i = 0; i < HUDX_ROWS * HUDX_COLS; i++) {
           const a = 2 * (panel * HUDX_ROWS * HUDX_COLS + i);
           const t = (shot.map[a]! | (shot.map[a + 1]! << 8)) & 0x3ff;
-          if (t >= 0x35 && t <= 0x38) out.push(t - 0x30);
+          if (t >= 0x31 && t <= 0x38) out.push(t - 0x30);
         }
         return out;
       });
     expect(shots(teamArenaRules, 2).entry.panels, '2 VS 2: none').toBe(0);
     const three = shots(teamArenaRules, 3).entry;
-    expect(labels(three)).toEqual([[5], [6]]);
+    expect(labels(three), 'P3 with team 1, P6 with team 2 (seats.ts)').toEqual([[3], [6]]);
     const four = shots(teamArenaRules, 4).entry;
-    expect(labels(four)).toEqual([[7, 5], [8, 6]]);
+    expect(labels(four)).toEqual([[4, 3], [8, 7]]);
     // drawn: 5P's box frame (pink, the panels' own palette 0) beside 1P's
     const pink = four.wide.filter((p, i) => i % 400 < 72 && p === ((31 << 11) | (23 << 0))).length;
     expect(pink).toBeGreaterThan(100);

@@ -23,6 +23,8 @@
  * palette 6 (free on this screen: palette 4 made grey) with the list's grey frame. The
  * titles go, and the countdown (objects 2E) moves down below the labels.
  *
+ * A session may preset the choice (seats.ts: the lobby's team size), shown first.
+ *
  * With three or four humans the original skips the choice (C030CC: `$1BA4` >= 3 goes to
  * C0313C, which sets team play, shows a message and goes on after a wait). Here the choice
  * runs as for one or two (C030D3: the countdown, pad 1's left / right and confirm), from
@@ -30,6 +32,7 @@
  */
 import type { Machine, Runner } from '@ssm/core';
 import { resetPlayers } from './players.ts';
+import { presetOf } from './seats.ts';
 
 /** rulesWord: the choice 0-3 (1 VS 1 .. 4 VS 4) */
 const CHOICE = 3;
@@ -125,6 +128,8 @@ function greyTeam(c: Machine): void {
 
 /** Each frame, after C00E47 loaded the palette list: the panels, palettes, titles, countdown. */
 function draw(c: Machine): void {
+  // the screen comes up on the session's team size (the lobby's, seats.ts)
+  if (!(c.rulesWord & BUILT) && presetOf(c)) choose(c, Math.min(3, presetOf(c) - 1));
   const team = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0;
   let choice = c.rulesWord & CHOICE;
   if (!team) choice = 0;

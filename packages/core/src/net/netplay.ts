@@ -22,11 +22,13 @@
  *   checksum  u8 2, u8 slot, i32 frame, u32 sum
  */
 import type { Game } from '../cpu/game.ts';
-import { Rollback, SLOTS } from './rollback.ts';
+import { Rollback, SLOTS, slotsOf } from './rollback.ts';
 
 export interface NetplayOptions {
   /** pad slots in play (2-8: pads 1-4, then players 5-8); peer k feeds slot k */
-  players: number;
+  players?: number;
+  /** or the slots in play, with gaps (one peer each; the others hold 0) */
+  slots?: readonly number[];
   /** the local slot */
   slot: number;
   /** frames of input delay (default 2) */
@@ -54,6 +56,8 @@ export class Netplay {
   readonly session: Rollback;
   readonly slot: number;
   readonly players: number;
+  /** the slots in play */
+  readonly slots: readonly number[];
   readonly delay: number;
   /** a message for every other peer */
   send: (data: Uint8Array) => void = () => {};
@@ -79,10 +83,12 @@ export class Netplay {
 
   constructor(game: Game, opts: NetplayOptions) {
     this.slot = opts.slot;
-    this.players = opts.players;
+    this.slots = slotsOf(opts);
+    this.players = this.slots.length;
+    if (!this.slots.includes(opts.slot)) throw new Error(`slot ${opts.slot} is not in play`);
     this.delay = opts.delay ?? 2;
     this.session = new Rollback(game, {
-      players: opts.players,
+      slots: this.slots,
       ...(opts.maxRollback !== undefined && { maxRollback: opts.maxRollback }),
       ...(opts.checksumEvery !== undefined && { checksumEvery: opts.checksumEvery }),
     });
@@ -108,7 +114,7 @@ export class Netplay {
   /** How many frames the local peer should give back: the most it is ahead of any other. */
   get lead(): number {
     let lead = 0;
-    for (let s = 0; s < this.players; s++) {
+    for (const s of this.slots) {
       if (s === this.slot) continue;
       lead = Math.max(lead, Math.trunc((this.advantage(s) - this.theirAdvantage[s]!) / 2));
     }
@@ -141,7 +147,7 @@ export class Netplay {
     const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
     const kind = dv.getUint8(0);
     const from = dv.getUint8(1);
-    if (from >= this.players || from === this.slot) return;
+    if (!this.slots.includes(from) || from === this.slot) return;
     if (kind === INPUT) {
       this.theirFrame[from] = dv.getInt32(2, true);
       this.acked[from] = Math.max(this.acked[from]!, dv.getInt32(KNOWN + 4 * this.slot, true));
@@ -160,7 +166,7 @@ export class Netplay {
   private sendInputs(): void {
     const s = this.session;
     let start = s.knownFor(this.slot);
-    for (let r = 0; r < this.players; r++) if (r !== this.slot) start = Math.min(start, this.acked[r]!);
+    for (const r of this.slots) if (r !== this.slot) start = Math.min(start, this.acked[r]!);
     const n = Math.min(s.knownFor(this.slot) - start, MAX_PADS);
     const b = new Uint8Array(PADS + 2 * n);
     const dv = new DataView(b.buffer);
@@ -168,8 +174,9 @@ export class Netplay {
     dv.setUint8(1, this.slot);
     dv.setInt32(2, s.frame, true);
     for (let r = 0; r < SLOTS; r++) {
-      dv.setInt32(KNOWN + 4 * r, r < this.players ? s.knownFor(r) : 0, true);
-      dv.setInt8(ADVANTAGE + r, r < this.players && r !== this.slot ? Math.max(-128, Math.min(127, this.advantage(r))) : 0);
+      const on = this.slots.includes(r);
+      dv.setInt32(KNOWN + 4 * r, on ? s.knownFor(r) : 0, true);
+      dv.setInt8(ADVANTAGE + r, on && r !== this.slot ? Math.max(-128, Math.min(127, this.advantage(r))) : 0);
     }
     dv.setInt32(START, start, true);
     dv.setUint8(COUNT, n);
