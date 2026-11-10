@@ -22,6 +22,11 @@
  * 2 / 3 (the list makes them right), a team panel takes palettes 4 / 5 when chosen, else
  * palette 6 (free on this screen: palette 4 made grey) with the list's grey frame. The
  * titles go, and the countdown (objects 2E) moves down below the labels.
+ *
+ * With three or four humans the original skips the choice (C030CC: `$1BA4` >= 3 goes to
+ * C0313C, which sets team play, shows a message and goes on after a wait). Here the choice
+ * runs as for one or two (C030D3: the countdown, pad 1's left / right and confirm), from
+ * 2 VS 2 and without 1 VS 1, so three or four humans can play 3 VS 3 or 4 VS 4.
  */
 import type { Machine, Runner } from '@ssm/core';
 
@@ -32,6 +37,7 @@ const BUILT = 4;
 
 const TEAM_FLAG = 0x1ba0;
 const TEAM_BIT = 0x40;
+const HUMANS = 0x1ba4;
 const PAD_RIGHT = 0x0100;
 const PAD_LEFT = 0x0200;
 
@@ -158,13 +164,22 @@ export function installMenu(r: Runner): void {
     c.rulesWord &= ~BUILT;
     return r.original(c, 0xc01de8);
   });
+  // C030CC LDA $1BA4 / CMP #$03 / BCS C0313C: three or four humans choose too, a team mode
+  r.split(0xc030d3);
+  r.override(0xc030cc, (c) => {
+    if (c.wram[HUMANS]! < 3) return r.original(c, 0xc030cc);
+    c.tick(4 * c.fast + 8);
+    if ((c.rulesWord & CHOICE) === 0) choose(c, 1);
+    return 0xc030d3;
+  });
   // C03118 LDA / EOR #$40 / STA $1BA0 (a new left or right press, A = the pad word): move
   r.split(0xc03120);
   r.override(0xc03118, (c) => {
     c.tick(8 * c.fast);
     const choice = c.rulesWord & CHOICE;
+    const lowest = c.wram[HUMANS]! >= 3 ? 1 : 0;
     if (c.a & PAD_RIGHT) choose(c, Math.min(3, choice + 1));
-    else if (c.a & PAD_LEFT) choose(c, Math.max(0, choice - 1));
+    else if (c.a & PAD_LEFT) choose(c, Math.max(lowest, choice - 1));
     return 0xc03120;
   });
   // C03131, after JSR C00E47 (the palette list): draw

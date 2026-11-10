@@ -1,13 +1,15 @@
 /**
  * 3 vs 3 and 4 vs 4 (teams.ts), from power-on: the Game Mode Select's 3 VS 3 / 4 VS 4, the
- * Team Battle Royal selection of ssm-disasm inputs/T013-team.txt (pad 1 is Jumbo), then the
- * match: the extra wrestlers are in, fight, are drawn (bank 2, the second OAM) with their HUD,
- * the referee and the judge count them, and a rollback restores everything.
+ * Team Battle Royal selection of ssm-disasm inputs/T013-team.txt (pad 1 is Jumbo; its
+ * partner confirmations pick the team's extras first, select.ts), then the match: the extra
+ * wrestlers are in, fight, are drawn (bank 2, the second OAM) with their HUD, the referee and
+ * the judge count them, and a rollback restores everything.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Game, Renderer, Rollback, checksum, padsFromScript } from '@ssm/core';
 import { installRules, teamArenaRules } from '../src/index.ts';
 import { EXTRA, pages, teamSize } from '../src/slots.ts';
+import { cursorCharacter, picks } from '../src/select.ts';
 import { haveRom, loadRom } from '../../core/test/fixture.ts';
 
 /** T013's team route with `size - 1` presses of right on the Game Mode Select */
@@ -67,6 +69,11 @@ describe.skipIf(!haveRom())('3 vs 3 and 4 vs 4', () => {
       for (const p of all) expect((w[p]! & 0x80) !== 0 && w[p + 0x76] !== 0, p.toString(16)).toBe(true);
       expect(all.filter((p) => w[p + 0x17d] === 0).length).toBe(size);
       expect(new Set(all.map((p) => w[p + 0x01])).size).toBe(2 * size);
+      // pad 1's team (side 0): its extras are the characters pad 1 picked, the CPU's are not
+      const picked = picks(g.m, 0, size - 2);
+      expect(picked.every((p) => p >= 0)).toBe(true);
+      expect(picked.map((p, k) => [cursorCharacter(g.m, p), w[EXTRA[2 * k]! + 0x01]])).toEqual(picked.map((p) => [cursorCharacter(g.m, p), cursorCharacter(g.m, p)]));
+      expect(picks(g.m, 1, size - 2).every((p) => p < 0)).toBe(true);
       // the extras' partner is a teammate, their opponents on the other side
       for (const p of all.slice(4)) {
         const rd = (a: number) => w[a]! | (w[a + 1]! << 8);

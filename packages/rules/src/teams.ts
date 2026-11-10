@@ -24,6 +24,7 @@
  */
 import type { Machine, Runner } from '@ssm/core';
 import { chosenTeamSize } from './menu.ts';
+import { cursorCharacter, picks } from './select.ts';
 import { BASE, EXT, EXTRA, bigTeams, extras, inPlay, isExtra, nextSlot, pages, prevSlot, rd16, setTeamSize, sideOf, wr16 } from './slots.ts';
 
 const TEAM_FLAG = 0x1ba0;
@@ -104,13 +105,29 @@ function jsl(c: Machine, target: number, returnTo: number): number {
 
 // ---- the match start ----------------------------------------------------------------------
 
-/** The characters of the extra slots: the first of the cast nobody picked, in order. */
+/**
+ * The characters of the extra slots (side e & 1): those picked on the player select
+ * (select.ts), the others the first of the cast nobody has, in order.
+ */
 export function extraChars(c: Machine): number[] {
   const size = chosenSize(c);
   if (size <= 2) return [];
+  const n = size - 2;
   const taken = new Set(BASE.map((p) => c.wram[p + 0x01]!));
-  const out: number[] = [];
-  for (const ch of CAST) if (!taken.has(ch) && out.length < 2 * (size - 2)) out.push(ch);
+  const out: number[] = Array(2 * n).fill(-1);
+  for (let e = 0; e < 2 * n; e++) {
+    const pick = picks(c, e & 1, n)[e >> 1]!;
+    const ch = pick >= 0 && pick < CAST.length ? cursorCharacter(c, pick) : -1;
+    if (ch >= 0 && !taken.has(ch)) {
+      out[e] = ch;
+      taken.add(ch);
+    }
+  }
+  for (let e = 0; e < 2 * n; e++)
+    if (out[e]! < 0) {
+      out[e] = CAST.find((ch) => !taken.has(ch))!;
+      taken.add(out[e]!);
+    }
   return out;
 }
 

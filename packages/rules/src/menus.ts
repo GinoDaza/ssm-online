@@ -7,7 +7,12 @@
  *
  * The screen is known by the last VRAM list loaded (C00643, Y = list * 2; ssm-disasm notes,
  * Screens): 2 the title, 7 the Game Mode Select, 6 the Team Battle Royal entry (ENTER THE
- * MATCH!). Other screens keep the SNES picture between black sides.
+ * MATCH!), 3 / 4 the player select (single / team). Other screens keep the SNES picture
+ * between black sides.
+ *
+ * The team player select of a 3 VS 3 or 4 VS 4 shows the extras picked so far (select.ts) by
+ * name in the margins, each side's on its side, in the screen's own font (BG3, 8 x 16: two
+ * tiles a letter; the names are the game's, the text records at C0:8A37).
  *
  * The entry screen of a 3 VS 3 or 4 VS 4 (the Game Mode Select's choice, menu.ts) shows the
  * extra players' boxes too, in the HUD panels (Machine.hudx) of the margins: the original's
@@ -18,6 +23,7 @@
  */
 import { HUDX_COLS, HUDX_ROWS, MARGIN_SPRITES, MARGIN_WORDS, Margin, type Machine, type Runner } from '@ssm/core';
 import { chosenTeamSize } from './menu.ts';
+import { cursorCharacter, picks } from './select.ts';
 
 const LOAD_LIST = 0xc00643;
 /** rulesWord bits 16-23: the last VRAM list loaded */
@@ -26,7 +32,7 @@ const SCREEN_MASK = 0xff << SCREEN_SHIFT;
 /** VRAM lists shared by several screens (fonts, common tiles): not a screen's own */
 const SHARED = new Set([0, 34]);
 
-export const Screen = { TITLE: 2, ENTRY: 6, MODE_SELECT: 7 } as const;
+export const Screen = { TITLE: 2, SELECT: 3, TEAM_SELECT: 4, ENTRY: 6, MODE_SELECT: 7 } as const;
 
 /** The last screen's VRAM list. */
 export const screenOf = (c: Machine) => (c.rulesWord & SCREEN_MASK) >>> SCREEN_SHIFT;
@@ -52,6 +58,9 @@ const SCREENS: Record<number, ScreenMargins> = {
   [Screen.MODE_SELECT]: { bg1: 'off', bg2: { x: 0, w: 48, y: 0, h: 32 } },
   // the lights and ropes (BG1) and the crowd (BG2)
   [Screen.ENTRY]: { bg1: { x: 0, w: 64, y: 0, h: 224 }, bg2: { x: 0, w: 64, y: 0, h: 224 } },
+  // the portraits (BG1) and the belt (BG2) on the backdrop
+  [Screen.SELECT]: { bg1: 'off', bg2: 'off' },
+  [Screen.TEAM_SELECT]: { bg1: 'off', bg2: 'off' },
 };
 
 function setLayer(c: Machine, n: number, m: LayerMargin): void {
@@ -83,7 +92,56 @@ export function menuPicture(c: Machine, margin: number): void {
   setLayer(c, 0, s.bg1);
   setLayer(c, 1, s.bg2);
   c.margins[MARGIN_SPRITES] = 1;
-  if (screenOf(c) === Screen.ENTRY && chosenTeamSize(c) > 2) extraBoxes(c, 2 * (chosenTeamSize(c) - 2));
+  const size = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0 ? chosenTeamSize(c) : 2;
+  if (screenOf(c) === Screen.ENTRY && size > 2) extraBoxes(c, 2 * (size - 2));
+  if (screenOf(c) === Screen.TEAM_SELECT && size > 2) pickedNames(c, size - 2);
+}
+
+const TEAM_FLAG = 0x1ba0;
+const TEAM_BIT = 0x40;
+/** the characters' names: text records (length, 20, a word, the letters, 00) by character */
+const NAMES = 0xc08a37;
+/** the select screen's font (BG3 tiles, the top half; the bottom one is the next tile) */
+const FONT_A_TO_G = [0x17, 0x19, 0x1b, 0x23, 0x25, 0x28, 0x2a];
+const FONT_H = 0x60;
+const TEXT = 0x2000;
+/** the names' BG3 rows: one extra at the first, two at both */
+const NAME_ROWS = [14, 17];
+
+/** A character's name (ASCII capitals) from the ROM. */
+function nameOf(c: Machine, ch: number): string {
+  let at = NAMES;
+  for (let k = 0; k < ch; k++) at += 5 + c.rom.u8(at);
+  let s = '';
+  for (let k = 0; k < c.rom.u8(at); k++) s += String.fromCharCode(c.rom.u8(at + 4 + k));
+  return s;
+}
+
+/** A capital's top tile in the select screen's font (0: none). */
+function glyph(ch: string): number {
+  const k = ch.charCodeAt(0) - 0x41;
+  if (k < 0 || k >= 26) return 0;
+  return k < 7 ? FONT_A_TO_G[k]! : FONT_H + 2 * (k - 7);
+}
+
+/** The extras' names picked so far, side 0's in the left panel, side 1's in the right. */
+function pickedNames(c: Machine, n: number): void {
+  c.hudxMap.fill(0);
+  c.hudxRow = NAME_ROWS[0]!;
+  c.hudxRows = NAME_ROWS[n - 1]! + 2 - NAME_ROWS[0]!;
+  for (let side = 0; side < 2; side++)
+    picks(c, side, n).forEach((pick, k) => {
+      if (pick < 0) return;
+      const name = nameOf(c, cursorCharacter(c, pick));
+      const row = NAME_ROWS[k]! - NAME_ROWS[0]!;
+      const col = side === 0 ? HUDX_COLS - 1 - name.length : 1;
+      [...name].forEach((ch, i) => {
+        const t = glyph(ch);
+        if (!t) return;
+        panelPut(c, side, row, col + i, TEXT | t);
+        panelPut(c, side, row + 1, col + i, TEXT | (t + 1));
+      });
+    });
 }
 
 /** the original boxes: BG3 rows BOX_TOP .. + BOX_ROWS, BOX_COLS columns each from column 0 */

@@ -18,6 +18,7 @@ import { installMenus, menuPicture } from './menus.ts';
 import { installOamExt } from './oamext.ts';
 import { installReferee } from './referee.ts';
 import { chosenSize, extraChars, installTeams } from './teams.ts';
+import { installSelect } from './select.ts';
 import { installHud } from './hud.ts';
 import { installSprites } from './sprites.ts';
 import { installWide, marginOf, setTall } from './wide.ts';
@@ -137,6 +138,7 @@ export function installRules(game: Game, rules: Ruleset): void {
   if (rules.modeMenu && rules.singlesArena) {
     game.m.ramExt = true;
     installTeams(r);
+    installSelect(r, chosenSize);
     installReferee(r);
     installOamExt(r);
     installHud(r, extraChars);

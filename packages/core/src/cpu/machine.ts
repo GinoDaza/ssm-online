@@ -77,7 +77,8 @@ const HUDX_TILES = OAM_EXT_NEXT + 0x220;
 const HUDX_MAP = HUDX_TILES + 0x400;
 const HUDX_PALETTES = HUDX_MAP + HUDX_MAP_BYTES;
 const MARGINS = HUDX_PALETTES + 0x40;
-const APU = MARGINS + 2 * 16;
+const RULES_BYTES = MARGINS + 2 * 16;
+const APU = RULES_BYTES + 16;
 /**
  * What the wide picture's margins show (Machine.margins): per BG layer (BG1-BG3, `MARGIN_WORDS`
  * words each) its mode, then the source patch; the last word is the sprite flags.
@@ -191,6 +192,8 @@ export class Machine {
    * the core. (packages/rules: the Game Mode Select's choice.)
    */
   rulesWord = 0;
+  /** more state the game modes own (extension), never read by the core */
+  readonly rulesBytes = this.state.subarray(RULES_BYTES, RULES_BYTES + 16);
   /** the sound unit (SPC700 + DSP), its state in the same buffer */
   readonly apu = new Apu(this.state.subarray(APU, STATE_SIZE));
   readonly rom: RomImage;

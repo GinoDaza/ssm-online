@@ -119,8 +119,9 @@ original screen has two panels (SINGLE MATCH, TEAM BATTLE ROYAL) in BG1 with the
 BG2; this mode rebuilds them as four narrower panels (a 5 x 10 tile window of the singles
 picture, three of the team one) with labels in the game's own font, and left / right move
 between them. The choice is kept in `Machine.rulesWord` (a word the modes own, saved with the
-state); 2 VS 2 and up set the team bit. Classic keeps the original screen
-(`rules/test/menu.test.ts`).
+state); 2 VS 2 and up set the team bit. With three or four humans the original skips the
+choice (team play after a wait); here they choose too, from 2 VS 2 up. Classic keeps the
+original screen (`rules/test/menu.test.ts`).
 
 **Menus in the wide picture** (`Ruleset.wideMenus`, `rules/src/menus.ts`). The screens before
 a match fill the same 400 x 224 picture. Their maps end at the SNES screen's 256 columns (past
@@ -130,7 +131,8 @@ on (the default, the matches), nothing, or a patch of the layer as it shows on t
 repeated (x, width, y, height); and sprites without a real x stay inside the 256, since the
 game parks the unused ones just outside. The screen is known by the last VRAM list loaded
 (C00643): the title (list 2: the backdrop), the Game Mode Select (7: the wallpaper, a 48 x 32
-patch) and the Team Battle Royal entry (6: the lights and the crowd, 64 px wide strips). The
+patch), the Team Battle Royal entry (6: the lights and the crowd, 64 px wide strips) and the
+player select (3 / 4: the portraits and the belt on the backdrop). The
 other screens keep the SNES picture between black sides (`rules/test/wide-menus.test.ts`).
 The entry of a 3 VS 3 / 4 VS 4 also shows the extra players' boxes (5P and 6P beside the four
 original ones, 7P and 8P above them) in the HUD panels of the margins, now as tall as the
@@ -141,8 +143,15 @@ for its player.
 **3 vs 3 and 4 vs 4** (the menu's 3 VS 3 / 4 VS 4 in the full arena, `rules/src/teams.ts`). A
 Team Battle Royal with one or two more wrestlers a team, run by the original team engine. The
 players pick the four wrestlers of the original selection (up to four humans); the extras are
-the CPU's, with the characters nobody picked. The team size is set at the match start (C189BC)
-in `Machine.rulesWord`.
+the CPU's. The team size is set at the match start (C189BC) in `Machine.rulesWord`.
+
+- Picking the extras (`select.ts`): on the team player select a human whose team has a CPU
+  partner picks it last: the first confirmations (C03A71, which ends the partner pick) go to the
+  team's extras (`Machine.rulesBytes`, kept until the next selection: the result screens use
+  ext WRAM), the cursor moving on to the next free character. Cursors and the CPU's wrestlers
+  (taken from the stage's list at the VS screen, C04226) skip the picks; the picked names show
+  in the margins, in the screen's font (`menus.ts`). Sides nobody picks for get the first free
+  characters (`rules/test/select.test.ts`).
 
 - Memory (`slots.ts`): low WRAM (0000-1FFF, where the wrestlers' pages 0800-0FFF are, run with
   D = the page) is full. `Machine.ramExt` maps 6000-7FFF of banks 00-3F / 80-BF (unmapped on

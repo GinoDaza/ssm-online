@@ -19,10 +19,10 @@ Bugs that are understood but not fixed yet, with their cause and the planned fix
   goes on after the first fills, so which pieces land in which OAM can change from frame to
   frame), the bank-2 tiles (`sprites.ts` `extraTiles`: the direct ROM copy may lag or skip an
   animation frame's upload) and the bank-2 palettes / priorities against the base wrestlers.
-- **The extra wrestlers are always the CPU's, and the game picks their characters** (the first
-  of the cast nobody picked). Humans play the original four slots. Fix: a selection for the
-  extras (the planned character-select menu in the client) and their pads (`+77` = a pad
-  number; C110CB reads pads by it).
+- **The extra wrestlers are always the CPU's.** Humans play the original four slots. Their
+  characters are picked by the human who picks the team's CPU partner (`select.ts`); a side
+  with two humans has nobody to pick, so its extras get the first free characters. Fix: pads
+  5-8 (`+77` = a pad number; C110CB reads pads by it).
 - **The time-over count-up on the result screen shows the four base wrestlers' bars only**
   (C05B27 counts first members, then second). The judge adds the extras' bars, so the result is
   right; the count does not show them.
