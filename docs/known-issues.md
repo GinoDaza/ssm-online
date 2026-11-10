@@ -14,6 +14,11 @@ Bugs that are understood but not fixed yet, with their cause and the planned fix
 
 ## 3 vs 3 and 4 vs 4
 
+- **The extra wrestlers' sprites flicker and look slightly wrong** (seen in play; it works, but
+  not cleanly). Not investigated yet. Places to check: the second OAM (`oamext.ts`: the pass
+  goes on after the first fills, so which pieces land in which OAM can change from frame to
+  frame), the bank-2 tiles (`sprites.ts` `extraTiles`: the direct ROM copy may lag or skip an
+  animation frame's upload) and the bank-2 palettes / priorities against the base wrestlers.
 - **The extra wrestlers are always the CPU's, and the game picks their characters** (the first
   of the cast nobody picked). Humans play the original four slots. Fix: a selection for the
   extras (the planned character-select menu in the client) and their pads (`+77` = a pad
