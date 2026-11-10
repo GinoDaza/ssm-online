@@ -11,3 +11,12 @@ Bugs that are understood but not fixed yet, with their cause and the planned fix
   not. Fix: in `render.ts` (`compose`), treat second-bank sprites as color-math sprites. During
   play the fixed color is 0, so only the results screen (and any flash) changes. Not checked:
   whether the singles results screen shows the same in the original.
+
+## 1 vs 1 in the full arena
+
+- **The PRESS / START labels at the bottom are split.** In a wide singles match the 2P labels
+  under each life bar (BG3, blinking PRESS / START) show a sliver of their top above the
+  whole word. Likely cause, not checked: the full-height picture moves the bottom HUD band
+  down from line `HUD_BOTTOM` (201, `wide.ts`), measured on the team HUD; the singles labels
+  start above that line, so their top rows stay and the rest drops 6 lines. Fix: take the
+  band's start from the singles HUD too (or move whole BG3 rows), then check both HUDs.
