@@ -16,7 +16,9 @@ margins show instead (`Machine.margins`, set once a frame outside a match): per 
 as it goes on (the default, the matches), nothing, or a patch of the layer as it shows on the
 screen, repeated (x, width, y, height); and sprites without a real x stay inside the 256, since
 the game parks the unused ones just outside. The screen is known by the last VRAM list loaded
-(C00643): the Game Mode Select (7: the wallpaper, a 48 x 32 patch), the Team Battle Royal entry
+(C00643): the Game Mode Select (7: the wallpaper, a 48 x 32 patch; with the four panels of
+`modeMenu` BG1 and BG2 go on into their maps' second halves, where the panels and wallpaper
+are drawn, and BG3 is off), the Team Battle Royal entry
 (6: the lights and the crowd, 64 px wide strips) and the player select (3 / 4: the portraits and
 the belt on the backdrop). The other screens keep the SNES picture between black sides, the
 title (list 2) too, whose margins would only show its backdrop colour

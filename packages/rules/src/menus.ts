@@ -25,7 +25,7 @@
  * (players.ts), of one whose player did (ENTRY ACCEPTED).
  */
 import { HUDX_COLS, HUDX_ROWS, MARGIN_SPRITES, MARGIN_WORDS, Margin, type Machine, type Runner } from '@ssm/core';
-import { chosenTeamSize } from './menu.ts';
+import { chosenTeamSize, panelsBuilt } from './menu.ts';
 import { cursorCharacter, picks } from './select.ts';
 import { joined, playerCursor } from './players.ts';
 import { playerNumber } from './seats.ts';
@@ -48,13 +48,20 @@ interface Patch {
   y: number;
   h: number;
 }
-/** a layer's margins: off, or a patch of it repeated */
-type LayerMargin = 'off' | Patch;
+/** a layer's margins: its map goes on, off, or a patch of it repeated */
+type LayerMargin = 'map' | 'off' | Patch;
 
 interface ScreenMargins {
   bg1: LayerMargin;
   bg2: LayerMargin;
+  bg3?: LayerMargin;
 }
+
+/**
+ * The Game Mode Select with the four panels (menu.ts) across the wide picture: BG1 and BG2
+ * go on into their maps' second halves, where they are drawn; BG3's second half is BG1's map.
+ */
+const WIDE_MODE_SELECT: ScreenMargins = { bg1: 'map', bg2: 'map', bg3: 'off' };
 
 const SCREENS: Record<number, ScreenMargins> = {
   // the panels (BG1) in the middle; the wallpaper (BG2) repeats every 6 columns and 4 rows
@@ -69,8 +76,8 @@ const SCREENS: Record<number, ScreenMargins> = {
 function setLayer(c: Machine, n: number, m: LayerMargin): void {
   const k = MARGIN_WORDS * n;
   const w = c.margins;
-  if (m === 'off') {
-    w[k] = Margin.OFF;
+  if (m === 'map' || m === 'off') {
+    w[k] = m === 'map' ? Margin.MAP : Margin.OFF;
     return;
   }
   w[k] = Margin.REPEAT;
@@ -86,7 +93,7 @@ function setLayer(c: Machine, n: number, m: LayerMargin): void {
  */
 export function menuPicture(c: Machine, margin: number): void {
   c.margins.fill(0);
-  const s = SCREENS[screenOf(c)];
+  const s = screenOf(c) === Screen.MODE_SELECT && panelsBuilt(c) ? WIDE_MODE_SELECT : SCREENS[screenOf(c)];
   if (!s) {
     c.wide = 0;
     return;
@@ -94,6 +101,7 @@ export function menuPicture(c: Machine, margin: number): void {
   c.wide = margin;
   setLayer(c, 0, s.bg1);
   setLayer(c, 1, s.bg2);
+  if (s.bg3) setLayer(c, 2, s.bg3);
   c.margins[MARGIN_SPRITES] = 1;
   const size = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0 ? chosenTeamSize(c) : 2;
   if (screenOf(c) === Screen.ENTRY && size > 2) extraBoxes(c, 2 * (size - 2));

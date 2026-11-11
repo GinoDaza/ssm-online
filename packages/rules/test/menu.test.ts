@@ -29,12 +29,17 @@ const press = (g: Game, pad: number) => {
 };
 const team = (g: Game) => (g.m.wram[0x1ba0]! & 0x40) !== 0;
 
-/** BG1 map row 18 (the labels) as text, from the font tiles 100 + character - 20 */
+/**
+ * BG1 map row 18 (the labels) as text, from the font tiles 100 + character - 20; the 64-column
+ * map from column -9 (55) to 40, the wide picture's 50
+ */
 function labels(g: Game): string {
   const base = (g.m.ioreg[0x07]! & 0xfc) << 9;
   let s = '';
-  for (let col = 0; col < 32; col++) {
-    const e = g.m.vram[base + (18 * 32 + col) * 2]! | (g.m.vram[base + (18 * 32 + col) * 2 + 1]! << 8);
+  for (let k = -9; k < 41; k++) {
+    const col = k & 63;
+    const at = base + ((col >> 5) << 11) + (18 * 32 + (col & 31)) * 2;
+    const e = g.m.vram[at]! | (g.m.vram[at + 1]! << 8);
     const t = e & 0x3ff;
     s += t >= 0x100 && t < 0x160 ? String.fromCharCode(t - 0x100 + 0x20) : ' ';
   }

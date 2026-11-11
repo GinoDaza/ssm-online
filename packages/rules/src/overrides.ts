@@ -57,6 +57,7 @@ export function installRules(game: Game, rules: Ruleset): void {
     });
     if (rules.wideMenus || rules.modeMenu) installMenus(r); // the screen tracker (menus.ts)
   }
-  if (rules.modeMenu) installMenu(r); // mode-menu.md
+  // mode-menu.md; the panels take the wide picture's margins with the menus in it
+  if (rules.modeMenu) installMenu(r, rules.singlesArena && rules.wideMenus ? marginOf(rules.screenWidth) >> 3 : 0);
   if (rules.modeMenu && rules.singlesArena) installBigTeams(game); // big-teams.md
 }

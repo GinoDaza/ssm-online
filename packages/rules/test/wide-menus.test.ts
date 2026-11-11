@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Game, HEIGHT, HUDX_COLS, HUDX_ROWS, Renderer, WIDTH, padsFromScript } from '@ssm/core';
-import { classicRules, installRules, teamArenaRules, type Ruleset } from '../src/index.ts';
+import { chosenTeamSize, classicRules, installRules, teamArenaRules, type Ruleset } from '../src/index.ts';
 import { haveRom, loadRom } from '../../core/test/fixture.ts';
 
 /** the title at 700, the Game Mode Select at 960, 2 VS 2 chosen: the entry screen at 1100 */
@@ -71,10 +71,11 @@ describe.skipIf(!haveRom())('the menus in the wide picture', () => {
       for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) if (shot.wide[y * 400 + 72 + x] === shot.narrow[y * WIDTH + x]) same++;
       expect(same / (WIDTH * HEIGHT), name).toBe(1);
     }
-    // the Game Mode Select's wallpaper repeats every 48 pixels, on the screen's lines too
+    // the Game Mode Select's wallpaper repeats every 48 pixels, above and below the panels too
+    const lines = Array.from({ length: HEIGHT }, (_, y) => y).filter((y) => y < 48 || y >= 152);
     let wallpaper = 0;
-    for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < 24; x++) if (s.modeSelect.wide[y * 400 + x] === s.modeSelect.wide[y * 400 + x + 48]) wallpaper++;
-    expect(wallpaper).toBe(24 * HEIGHT);
+    for (const y of lines) for (let x = 0; x < 24; x++) if (s.modeSelect.wide[y * 400 + x] === s.modeSelect.wide[y * 400 + x + 48]) wallpaper++;
+    expect(wallpaper).toBe(24 * lines.length);
   }, 120_000);
 
   it('the entry of a 3 VS 3 / 4 VS 4: the extra players\' boxes in the margins, numbered by seat', () => {
@@ -98,6 +99,45 @@ describe.skipIf(!haveRom())('the menus in the wide picture', () => {
     const pink = four.wide.filter((p, i) => i % 400 < 72 && p === ((31 << 11) | (23 << 0))).length;
     expect(pink).toBeGreaterThan(100);
   }, 180_000);
+
+  it('full arena: the Game Mode Select\'s panels across the 400 px, every grey one the same grey, no flash', () => {
+    const g = new Game(loadRom());
+    installRules(g, teamArenaRules);
+    g.powerOn();
+    const wide = new Renderer(g.m, 400);
+    g.m.onLine = (y) => wide.line(y);
+    const run = (script: string) => {
+      for (const t of script.split(' ')) {
+        const [s, n] = t.split('*');
+        for (let k = 0; k < Number(n); k++) g.step(padsFromScript(s!).slice(0, 4));
+      }
+      return wide.pixels.slice();
+    };
+    /** panel k's picture: 12 tiles from tile column 1 + 12k of the 50, the inner 10 x 10 */
+    const panel = (px: Uint16Array, k: number) => {
+      const out: number[] = [];
+      for (let y = 56; y < 136; y++) for (let x = 16 + 96 * k; x < 96 + 96 * k; x++) out.push(px[y * 400 + x]!);
+      return out;
+    };
+    const singles = run('wait*650 start*4 wait*60 start*4 wait*240');
+    expect(g.m.wram[0x56], 'the Game Mode Select').toBe(4);
+    // frame by frame through the press (the list changes a frame after the team bit): no flash
+    for (let f = 0; f < 34; f++) {
+      const px = run(f < 4 ? 'right*1' : 'wait*1');
+      expect(panel(px, 2), `frame ${f}`).toEqual(panel(singles, 2));
+      expect(panel(px, 3), `frame ${f}`).toEqual(panel(singles, 3));
+    }
+    const team = run('wait*1');
+    expect(chosenTeamSize(g.m)).toBe(2);
+    // 1 VS 1 chosen: the three team panels show the same picture, the last one in the margin
+    expect(panel(singles, 2)).toEqual(panel(singles, 1));
+    expect(panel(singles, 3)).toEqual(panel(singles, 1));
+    // 2 VS 2 chosen: it changes, 3 VS 3 and 4 VS 4 keep their grey
+    expect(panel(team, 1)).not.toEqual(panel(singles, 1));
+    expect(panel(team, 2)).toEqual(panel(singles, 2));
+    expect(panel(team, 3)).toEqual(panel(singles, 3));
+    expect(panel(team, 0)).not.toEqual(panel(singles, 0));
+  }, 60_000);
 
   it('classic: the menus keep black sides', () => {
     const s = shots(classicRules);
