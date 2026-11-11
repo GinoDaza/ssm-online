@@ -32,6 +32,11 @@ export const EXT = {
   REFEREE: 0x6460,
   /** the OAM buffer 7E:3200-341F while the second OAM is drawn (oamext.ts) */
   OAM_STASH: 0x6500,
+  /**
+   * the extra slots' frame uploads waiting for the video IRQ's DMA run (sprites.ts), 6 bytes
+   * each: what (bit 0 the frame, bit 1 the companion piece), frame +4B, record table +4E, +1D9
+   */
+  TILE_QUEUE: 0x6720,
   /** the extra slots' sprite palettes, 4 x 16 colors (bank 2's palettes 4-7) */
   PALETTES: 0x6780,
 } as const;

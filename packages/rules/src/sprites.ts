@@ -25,11 +25,11 @@
  * - palettes: the same for the sprite palettes. Singles keep the items' colors in palette 7
  *   (palette list 4, loaded by the ring load C01FB8), team play gives palettes 4-7 to its four
  *   wrestlers (C18B80). The bank's palettes follow the game's (its CGRAM buffer 3100-31DF,
- *   each drawing pass), but palette 7 holds the items' colors from that list.
+ *   copied when the IRQ uploads it, C00282), but palette 7 holds the items' colors from that list.
  */
 import { OBJX_BANK2, rtl, type Machine, type Runner } from '@ssm/core';
 import { oamIndex, oamPassStart } from './oamext.ts';
-import { EXT, EXTRA, bigTeams, extras, isExtra, rd16, setTeamSize } from './slots.ts';
+import { EXT, EXTRA, bigTeams, extras, isExtra, rd16, setTeamSize, wr16 } from './slots.ts';
 import { isLeftRope } from './ropes.ts';
 import { setTall } from './wide.ts';
 
@@ -170,9 +170,17 @@ export function installSprites(r: Runner, menus?: (c: Machine) => void): void {
     }
     // the extra wrestlers are the match's (set by its start C189BC, state 18), not the screens'
     // after it (from 20 on, which use ext WRAM as a buffer) or before
+    if (bigTeams(c)) uploadExtraTiles(c); // with the frames of the DMA list (C0036D)
     const state = c.wram[0x56]!;
     if (state < 0x14 || state >= 0x20) setTeamSize(c, 2);
     return r.original(c, 0xc00369);
+  });
+
+  // C00282 (LDA $D5, the IRQ's CGRAM upload, right after the OAM's): the banks' palettes go
+  // with them, so a palette shows with the OAM it was set with
+  r.override(0xc00282, (c) => {
+    bankPalettes(c);
+    return r.original(c, 0xc00282);
   });
 
   // the drawing pass C1F5A2 starts with no flags; then each drawer's entries, from $F4 on, are
@@ -181,13 +189,6 @@ export function installSprites(r: Runner, menus?: (c: Machine) => void): void {
   r.override(0xc1f5a2, (c) => {
     c.oamxNext.fill(0);
     oamPassStart(c);
-    if (!isTeam(c) && c.wide) c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[0] + 0x100), 0);
-    if (isTeam(c)) {
-      c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[1]), 0);
-      // bank 2 (the extra wrestlers): the game's palettes, 4-7 the extras' own
-      c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[0] + 0x80), BANK2_PALETTES);
-      c.cgramx.set(c.wram.subarray(EXT.PALETTES, EXT.PALETTES + 0x80), BANK2_PALETTES + 0x80);
-    }
     return r.original(c, 0xc1f5a2);
   });
   for (const drawer of [0xc1f6c7, 0xc1f74c, 0xc1f7bb]) {
@@ -224,20 +225,62 @@ function toBank2(c: Machine, src: number, size: number, dest: number): void {
   }
 }
 
+/** The sprite banks' palettes from the game's CGRAM buffer, when the IRQ uploads it (C00282). */
+function bankPalettes(c: Machine): void {
+  if (!isTeam(c) && c.wide) c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[0] + 0x100), 0);
+  if (isTeam(c)) {
+    c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[1]), 0);
+    // bank 2 (the extra wrestlers): the game's palettes, 4-7 the extras' own
+    c.cgramx.set(c.wram.subarray(SPRITE_PALETTES[0], SPRITE_PALETTES[0] + 0x80), BANK2_PALETTES);
+    c.cgramx.set(c.wram.subarray(EXT.PALETTES, EXT.PALETTES + 0x80), BANK2_PALETTES + 0x80);
+  }
+}
+
+const QUEUE_BYTES = 6;
+/** C0:D532, the word C00971 puts in `$04`: the companion pieces' record table (bank C5) */
+const COMPANION_TABLE = 0xc0d532;
+
 /**
- * The extra wrestlers' frames (C00A2B for +50, C00AD5 for +1D9) into sprite bank 2, at the VRAM
- * place of the base slot each mirrors. Bank 2 is not VRAM, so the copy is direct instead of
- * DMA records: it takes no room in the DMA list (0400, A0 bytes) nor upload time.
+ * The extra wrestlers' frame requests (+50 for C00A2B, +1D9 for C00AD5), taken when the IRQ
+ * builds the DMA list (C00971, about line 80, while the picture is drawn). The base slots' frames
+ * reach VRAM when that list runs, in the next vertical blank, with the OAM drawn for them; the
+ * extras' wait for the same moment (uploadExtraTiles). A newer request replaces one still waiting
+ * (a frame the IRQ skipped): only the latest frame is drawn.
  */
-function extraTiles(c: Machine): void {
+function queueExtraTiles(c: Machine): void {
   const w = c.wram;
-  const rom16 = (a: number) => c.peek8(a) | (c.peek8((a & 0xff0000) | ((a + 1) & 0xffff)) << 8);
   EXTRA.slice(0, extras(c)).forEach((page, e) => {
-    const vram = SLOT_VRAM[e]!;
+    const q = EXT.TILE_QUEUE + QUEUE_BYTES * e;
     if (w[page + 0x50]) {
       w[page + 0x50] = 0;
-      const f = rd16(c, page + 0x4b) & 0x1ff;
-      let p = 0xc50000 | rom16(0xc50000 | ((2 * f + rd16(c, page + 0x4e)) & 0xffff));
+      w[q] = w[q]! | 1;
+      wr16(c, q + 1, rd16(c, page + 0x4b));
+      wr16(c, q + 3, rd16(c, page + 0x4e));
+    }
+    if (w[page + 0x1d9]) {
+      w[q] = w[q]! | 2;
+      w[q + 5] = w[page + 0x1d9]!;
+      w[page + 0x1d9] = 0;
+    }
+  });
+}
+
+/**
+ * The waiting frames into sprite bank 2, at the VRAM place of the base slot each extra mirrors,
+ * when the IRQ runs the DMA list (C00369). Bank 2 is not VRAM, so the copy is direct instead of
+ * DMA records: it takes no room in the DMA list (0400, A0 bytes).
+ */
+function uploadExtraTiles(c: Machine): void {
+  const w = c.wram;
+  const rom16 = (a: number) => c.peek8(a) | (c.peek8((a & 0xff0000) | ((a + 1) & 0xffff)) << 8);
+  EXTRA.slice(0, extras(c)).forEach((_, e) => {
+    const vram = SLOT_VRAM[e]!;
+    const q = EXT.TILE_QUEUE + QUEUE_BYTES * e;
+    const what = w[q]!;
+    w[q] = 0;
+    if (what & 1) {
+      const f = rd16(c, q + 1) & 0x1ff;
+      let p = 0xc50000 | rom16(0xc50000 | ((2 * f + rd16(c, q + 3)) & 0xffff));
       for (let k = 0; k < 32; k++) {
         const n = c.peek8(p);
         if (!n) break;
@@ -250,10 +293,8 @@ function extraTiles(c: Machine): void {
         p = 0xc50000 | ((p + 5) & 0xffff);
       }
     }
-    const extra = w[page + 0x1d9]!;
-    if (extra) {
-      w[page + 0x1d9] = 0;
-      let p = 0xc50000 | rom16(0xc50000 | ((rd16(c, 0x04) + extra) & 0xffff));
+    if (what & 2) {
+      let p = 0xc50000 | rom16(0xc50000 | ((rom16(COMPANION_TABLE) + w[q + 5]!) & 0xffff));
       for (let k = 0; k < 32; k++) {
         const size = rom16(p);
         const src = (c.peek8(p + 4) << 16) | rom16(p + 2);
@@ -285,7 +326,7 @@ function extraPalette(c: Machine): void {
 function installExtraGraphics(r: Runner): void {
   // C009E5 SEP #$30, after the four slots of C00971 (D = 0)
   r.override(0xc009e5, (c) => {
-    if (bigTeams(c)) extraTiles(c);
+    if (bigTeams(c)) queueExtraTiles(c);
     return r.original(c, 0xc009e5);
   });
   r.override(0xc18b7d, (c) => {

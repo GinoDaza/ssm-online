@@ -6,7 +6,7 @@
  * the judge count them, and a rollback restores everything.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Game, Renderer, Rollback, checksum, padsFromScript } from '@ssm/core';
+import { Game, OBJX_BANK2, Renderer, Rollback, checksum, padsFromScript } from '@ssm/core';
 import { installRules, teamArenaRules } from '../src/index.ts';
 import { EXTRA, pages, teamSize } from '../src/slots.ts';
 import { cursorCharacter, picks } from '../src/select.ts';
@@ -98,6 +98,28 @@ describe.skipIf(!haveRom())('3 vs 3 and 4 vs 4', () => {
       expect(g.m.hudxTiles.subarray(0, 0x100).some((v) => v !== 0)).toBe(true);
     }, 120_000);
   }
+
+  it("4 VS 4: the extras' frames and palettes change in the vertical blank, with the OAM", () => {
+    const g = fight(4);
+    const m = g.m;
+    let tiles = m.objx.slice(OBJX_BANK2);
+    let colors = m.cgramx.slice();
+    const during: number[] = [];
+    let changes = 0;
+    m.onLine = (y) => {
+      const nt = m.objx.subarray(OBJX_BANK2);
+      const changed = nt.some((v, i) => v !== tiles[i]) || m.cgramx.some((v, i) => v !== colors[i]);
+      if (!changed) return;
+      changes++;
+      tiles = nt.slice();
+      colors = m.cgramx.slice();
+      // the picture's lines end at m.tall (the full-height picture) or 225
+      if (y > 0 && y < (m.tall || 225)) during.push(y);
+    };
+    for (let f = 0; f < 300; f++) g.step([pad(0, f), 0, 0, 0]);
+    expect(changes, 'the extras change frames').toBeGreaterThan(50);
+    expect(during, 'lines where bank 2 changed during the picture').toEqual([]);
+  }, 120_000);
 
   it('3 VS 3: a time over judges the teams with the extras life', () => {
     const g = fight(3);

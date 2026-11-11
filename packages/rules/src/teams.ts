@@ -138,6 +138,7 @@ function matchStart(c: Machine): void {
   setTeamSize(c, size);
   if (size <= 2) return;
   extraChars(c).forEach((ch, e) => (c.wram[EXTRA[e]! + 0x01] = ch));
+  c.wram.fill(0, EXT.TILE_QUEUE, EXT.TILE_QUEUE + 6 * 4); // no frame waits (sprites.ts)
 }
 
 /**

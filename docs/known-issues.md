@@ -4,11 +4,6 @@ Bugs that are understood but not fixed yet, with their cause and the planned fix
 
 ## 3 vs 3 and 4 vs 4
 
-- **The extra wrestlers' sprites flicker and look slightly wrong** (seen in play; it works, but
-  not cleanly). Not investigated yet. Places to check: the second OAM (`oamext.ts`: the pass
-  goes on after the first fills, so which pieces land in which OAM can change from frame to
-  frame), the bank-2 tiles (`sprites.ts` `extraTiles`: the direct ROM copy may lag or skip an
-  animation frame's upload) and the bank-2 palettes / priorities against the base wrestlers.
 - **Extras nobody picks get the first free characters**: a CPU extra's character is picked by
   the human who picks the team's CPU partner (`select.ts`); a side with two humans in pads 1-4
   has no such human, so its CPU extras get the first characters nobody has.

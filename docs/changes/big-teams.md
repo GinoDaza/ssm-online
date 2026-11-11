@@ -58,9 +58,11 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
   judge on the counted bars (C10D3B) take every member; the judge of C11BD3 too.
 - Graphics (`sprites.ts`): each extra mirrors a base slot (its tile base +05 and palette), in a
   third sprite bank (Machine extension: `objx` bank 2, VMAIN bit 5, `oamx` bit 2, its own
-  palettes in `cgramx`). Its frames are copied from the ROM to bank 2 directly when the IRQ
-  builds the DMA list (C00971), so they take no DMA list room or upload time; its palette loader
-  (C18B7D) writes bank 2's palettes 4-7.
+  palettes in `cgramx`). Its frame requests are taken when the IRQ builds the DMA list (C00971,
+  mid-picture) and copied from the ROM to bank 2 when that list runs in the vertical blank
+  (C00369), with the OAM drawn for them, as the base slots' frames reach VRAM; they take no DMA
+  list room. Its palette loader (C18B7D) writes bank 2's palettes 4-7, which go to `cgramx` with
+  the CGRAM upload (C00282).
 - More sprites (`oamext.ts`): four wrestlers already fill most of the 128 OAM entries. In these
   matches a full OAM is put aside and the pass goes on in the same buffer, which becomes a
   second OAM (`Machine.oamExt`, 128 entries drawn below the first) committed with the OAM.
@@ -71,5 +73,5 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
 - Speed: six or eight wrestlers get four times the CPU (`Machine.overclock` = 2).
 
 `rules/test/big-teams.test.ts` plays both from power-on: every wrestler in and fighting, drawn
-from bank 2 and the second OAM, the HUD panels, a time over judged with the extras' life, and a
-rollback in a 4 vs 4 match.
+from bank 2 and the second OAM, their frames and palettes changing only in the vertical blank,
+the HUD panels, a time over judged with the extras' life, and a rollback in a 4 vs 4 match.
