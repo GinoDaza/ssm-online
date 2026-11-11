@@ -27,4 +27,7 @@ npx tsx tools/compare-frames.ts <dump> <frames>   # game vs emulator dump
 - A change to the translator or the Machine needs a test against the original: captured
   calls or emulator dumps (`tools/oracle`). The sibling repo `../ssm-disasm` documents the
   ROM (`docs/notes.md`); use it to look up routines and addresses.
+- A new change to the original gets its own document in `docs/changes/` (what changes, the
+  `Ruleset` field, code, tests, how) and a row in its `README.md`; a change to an existing one
+  updates its document.
 - Commits: `type(scope): summary` (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`).
