@@ -1,7 +1,7 @@
 /**
- * The menus in the wide picture (Ruleset.wideMenus), from power-on with a multitap: the title,
- * the Game Mode Select and the Team Battle Royal entry fill the 400 px with their own layers,
- * the SNES picture is their middle; the entry of a 3 VS 3 / 4 VS 4 shows the extra players'
+ * The menus in the wide picture (Ruleset.wideMenus), from power-on with a multitap: the Game
+ * Mode Select and the Team Battle Royal entry fill the 400 px with their own layers, the SNES
+ * picture is their middle; the title keeps black sides; the entry of a 3 VS 3 / 4 VS 4 shows the extra players'
  * boxes in the margins; classic keeps black sides.
  */
 import { describe, expect, it } from 'vitest';
@@ -58,9 +58,12 @@ function drawnMargins(px: Uint16Array): number {
 }
 
 describe.skipIf(!haveRom())('the menus in the wide picture', () => {
-  it('full arena: the title, the Game Mode Select and the entry fill the margins', () => {
+  it('full arena: the Game Mode Select and the entry fill the margins, the title keeps black sides', () => {
     const s = shots(teamArenaRules);
+    expect(s.title.margin).toBe(0);
+    expect(drawnMargins(s.title.wide)).toBe(0);
     for (const [name, shot] of Object.entries(s)) {
+      if (name === 'title') continue;
       expect(shot.margin, name).toBe(72);
       expect(drawnMargins(shot.wide), name).toBeGreaterThan(0.95);
       // the middle is the SNES picture
@@ -68,8 +71,6 @@ describe.skipIf(!haveRom())('the menus in the wide picture', () => {
       for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) if (shot.wide[y * 400 + 72 + x] === shot.narrow[y * WIDTH + x]) same++;
       expect(same / (WIDTH * HEIGHT), name).toBe(1);
     }
-    // the title's margins are its backdrop: one colour
-    expect(new Set(Array.from({ length: HEIGHT }, (_, y) => s.title.wide[y * 400 + 10])).size).toBe(1);
     // the Game Mode Select's wallpaper repeats every 48 pixels, on the screen's lines too
     let wallpaper = 0;
     for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < 24; x++) if (s.modeSelect.wide[y * 400 + x] === s.modeSelect.wide[y * 400 + x + 48]) wallpaper++;

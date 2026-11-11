@@ -6,9 +6,9 @@
  * inside the 256 (the game parks the unused ones just outside).
  *
  * The screen is known by the last VRAM list loaded (C00643, Y = list * 2; ssm-disasm notes,
- * Screens): 2 the title, 7 the Game Mode Select, 6 the Team Battle Royal entry (ENTER THE
- * MATCH!), 3 / 4 the player select (single / team). Other screens keep the SNES picture
- * between black sides.
+ * Screens): 7 the Game Mode Select, 6 the Team Battle Royal entry (ENTER THE MATCH!), 3 / 4
+ * the player select (single / team). Other screens keep the SNES picture between black sides,
+ * the title (2) too: its margins would only show the backdrop colour.
  *
  * The team player select of a 3 VS 3 or 4 VS 4 shows the extras picked so far (select.ts) by
  * name in the margins, each side's on its side, in the screen's own font (BG3, 8 x 16: two
@@ -57,8 +57,6 @@ interface ScreenMargins {
 }
 
 const SCREENS: Record<number, ScreenMargins> = {
-  // the logo and the text on the backdrop
-  [Screen.TITLE]: { bg1: 'off', bg2: 'off' },
   // the panels (BG1) in the middle; the wallpaper (BG2) repeats every 6 columns and 4 rows
   [Screen.MODE_SELECT]: { bg1: 'off', bg2: { x: 0, w: 48, y: 0, h: 32 } },
   // the lights and ropes (BG1) and the crowd (BG2)
