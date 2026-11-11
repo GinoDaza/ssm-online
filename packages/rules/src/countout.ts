@@ -18,7 +18,7 @@
  *   back of the ring as eliminated wrestlers while the round end is on screen. Both teams
  *   outside: both lose
  *   (`$1A64`, as a no contest). `$1A62` = 1 / `$1A63` = 1 select the singles message (COUNT OUT /
- *   DOUBLE COUNT OUT, C069F8: an arena site in overrides.ts); C021E7 clears `$1A62` again before
+ *   DOUBLE COUNT OUT, C069F8: an arena site in full-arena.ts); C021E7 clears `$1A62` again before
  *   the team flow reads it as a time over.
  */
 import type { Machine, Runner } from '@ssm/core';

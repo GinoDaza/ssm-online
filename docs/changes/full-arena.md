@@ -5,7 +5,7 @@ floor around it, use the ringside items and lose by count-out. The team logic (p
 targets, HUD, judge) is the original's.
 
 - **Ruleset:** `singlesArena` (mode `team-arena`). Classic leaves the original unchanged.
-- **Code:** `rules/src/overrides.ts` (`ARENA_SITES`), `camera.ts`, `items.ts`, `arena.ts`,
+- **Code:** `rules/src/full-arena.ts` (`ARENA_SITES`), `camera.ts`, `items.ts`, `arena.ts`,
   `sprites.ts`, `ropes.ts`, `countout.ts`
 - **Tests:** `rules/test/team-arena.test.ts`, `team-arena-engine.test.ts`,
   `team-arena-graphics.test.ts`
@@ -17,7 +17,7 @@ the singles environment: the wide arena with the floor around the ring, the fron
 apron, going out and back in, the ringside items. The game picks its environment by `$1BA0` bit
 6 (team), read at about a hundred sites; all were read (`tools/disasm.ts`, `../ssm-disasm`
 notes) and sorted into team logic (kept) and environment (`ARENA_SITES` in
-`rules/src/overrides.ts`, each with the reason). An environment site runs the original
+`rules/src/full-arena.ts`, each with the reason). An environment site runs the original
 instruction with the team bit hidden, so the singles path follows; singles matches are unchanged
 (checked to the clock against the emulator).
 

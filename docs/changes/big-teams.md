@@ -5,8 +5,8 @@ VS 4). The extra wrestlers are played by players 5-8 or by the CPU.
 
 - **Ruleset:** `singlesArena` with `modeMenu` (the team size is the menu's choice). Classic
   leaves the original unchanged.
-- **Code:** `rules/src/teams.ts`, `players.ts`, `select.ts`, `slots.ts`, `referee.ts`,
-  `sprites.ts`, `oamext.ts`, `hud.ts`, `seats.ts`
+- **Code:** `rules/src/big-teams.ts` (the install), `teams.ts`, `players.ts`, `select.ts`,
+  `slots.ts`, `referee.ts`, `sprites.ts`, `oamext.ts`, `hud.ts`, `seats.ts`
 - **Tests:** `rules/test/big-teams.test.ts`, `players.test.ts`, `select.test.ts`,
   `seats.test.ts`
 

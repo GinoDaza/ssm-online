@@ -4,8 +4,8 @@ A Single Match gets the same wide, full-height picture and camera as the team ma
 mode.
 
 - **Ruleset:** `wideSingles`. Classic leaves the original unchanged.
-- **Code:** `rules/src/overrides.ts` (C02631, C05E1D), `rules/src/camera.ts`
-  (`singlesWideCamera`)
+- **Code:** `rules/src/wide-singles.ts` (C1B90B, C05E1D), `rules/src/camera.ts`
+  (`singlesWideCamera`); the match start C02631 in `overrides.ts`
 - **Tests:** `rules/test/singles-wide.test.ts`
 
 ## How

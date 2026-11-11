@@ -40,8 +40,13 @@ export class Runner {
     return this.translator.get(c, pc)(c);
   }
 
-  /** Run `fn` instead of the code at `pc` (null: the original again). */
+  /**
+   * Run `fn` instead of the code at `pc` (null: the original again). An address takes one
+   * override: registering a second throws, so two changes never replace each other silently
+   * (remove the first with null to replace it on purpose).
+   */
   override(pc: number, fn: Override | null): void {
+    if (fn && this.overrides.has(pc)) throw new Error(`override at ${pc.toString(16).toUpperCase()} already registered`);
     if (fn) this.overrides.set(pc, fn);
     else this.overrides.delete(pc);
     this.translator.clear();

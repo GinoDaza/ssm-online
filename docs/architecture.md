@@ -31,9 +31,9 @@ tools/           compare-frames.ts / compare-video.ts (game vs emulator), disasm
   boundary after line 225 begins, as in the oracle; that can be inside the IRQ or a DMA.
 - **Overrides** (`Runner.override(pc, fn)`): a TypeScript function registered at an address
   runs instead of the translated code. The address may be inside a routine: translated blocks
-  end before every override, so execution always reaches it. New modes work this way, in
-  `packages/rules/src/overrides.ts` (`installRules`), reading the `Ruleset`; classic installs
-  none. `npx tsx tools/disasm.ts <address> [count]` disassembles the ROM to write them.
+  end before every override, so execution always reaches it; an address takes one override (a
+  second throws). New modes work this way, in `packages/rules/src/overrides.ts` (`installRules`,
+  one install per change), reading the `Ruleset`; classic installs none. `npx tsx tools/disasm.ts <address> [count]` disassembles the ROM to write them.
   `Runner.split` ends blocks at an address without replacing code and `Runner.original` runs
   the original code up to the next block end, so an override can wrap one original instruction.
 - **Determinism**: integers only; no clocks, randomness or platform APIs in `packages/core`

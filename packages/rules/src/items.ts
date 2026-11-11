@@ -5,7 +5,7 @@
  * either ends the supply or, with both wrestlers on the ring, calls C18CB3), then C2032D
  * moves and draws the items. The team order (C00FAF) has neither. Picking up (C1A3C5),
  * carrying and hitting with an item are wrestler code shared by both modes; the items are set
- * up at the match start by C18BBF (an arena site in overrides.ts).
+ * up at the match start by C18BBF (an arena site in full-arena.ts).
  *
  * The team order gets both steps after its parent C11BD3, before the contact root, as in
  * singles, by running the original code:

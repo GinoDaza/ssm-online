@@ -24,4 +24,13 @@ describe.skipIf(!haveRom())('overrides', () => {
     expect(calls).toBe(1);
     expect(got).toBe(want);
   });
+
+  it('an address takes one override: a second throws, null frees it', () => {
+    const g = new Game(loadRom());
+    const fn = () => 0;
+    g.runner.override(0x00ffa5, fn);
+    expect(() => g.runner.override(0x00ffa5, fn)).toThrow('FFA5 already registered');
+    g.runner.override(0x00ffa5, null);
+    expect(() => g.runner.override(0x00ffa5, fn)).not.toThrow();
+  });
 });

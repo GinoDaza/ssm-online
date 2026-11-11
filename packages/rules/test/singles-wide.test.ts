@@ -58,6 +58,7 @@ describe.skipIf(!haveRom())('singles in the full arena: the wide picture', () =>
     const owner = new Int32Array(128).fill(-1);
     for (const pc of [0xc1f6c7, 0xc1f74c, 0xc1f7bb]) {
       const prev = g.runner.overrides.get(pc)!;
+      g.runner.override(pc, null);
       g.runner.override(pc, (c) => {
         owner.fill(c.x, c.wram[0xf4]! & 0x7f);
         return prev(c);
