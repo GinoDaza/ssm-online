@@ -5,7 +5,7 @@
  * boxes in the margins; classic keeps black sides.
  */
 import { describe, expect, it } from 'vitest';
-import { Game, HEIGHT, HUDX_COLS, HUDX_ROWS, Renderer, WIDTH, padsFromScript } from '@ssm/core';
+import { Game, HEIGHT, HUDX_COLS, HUDX_ROWS, Margin, Renderer, WIDTH, padsFromScript } from '@ssm/core';
 import { chosenTeamSize, classicRules, installRules, teamArenaRules, type Ruleset } from '../src/index.ts';
 import { haveRom, loadRom } from '../../core/test/fixture.ts';
 
@@ -137,6 +137,45 @@ describe.skipIf(!haveRom())('the menus in the wide picture', () => {
     expect(panel(team, 2)).toEqual(panel(singles, 2));
     expect(panel(team, 3)).toEqual(panel(singles, 3));
     expect(panel(team, 0)).not.toEqual(panel(singles, 0));
+  }, 60_000);
+
+  it('full arena: the player select\'s belt goes on into the margins', () => {
+    const g = new Game(loadRom());
+    installRules(g, teamArenaRules);
+    g.powerOn();
+    const wide = new Renderer(g.m, 400);
+    g.m.onLine = (y) => wide.line(y);
+    for (const t of 'wait*650 start*4 wait*60 start*4 wait*240 y*4 wait*300'.split(' ')) {
+      const [s, n] = t.split('*');
+      for (let k = 0; k < Number(n); k++) g.step(padsFromScript(s!).slice(0, 4));
+    }
+    expect(g.m.wram[0x56], 'the player select').toBe(0x0c);
+    const base = (g.m.ioreg[0x08]! & 0xfc) << 9;
+    const bg2 = (row: number, col: number) => {
+      const a = base + ((col & 32) << 6) + (row * 32 + (col & 31)) * 2;
+      return g.m.vram[a]! | (g.m.vram[a + 1]! << 8);
+    };
+    // the margins' own tiles (Margin.OWN), the left margin's entries the right's mirrored;
+    // nothing above and below the belt (rows 5-17)
+    expect(g.m.margins[5]).toBe(Margin.OWN);
+    for (let row = 0; row < 28; row++)
+      for (let k = 0; k < 9; k++) {
+        const right = bg2(row, 32 + k);
+        expect(right === 0, `row ${row} column ${32 + k}`).toBe(row < 5 || row > 17);
+        expect(bg2(row, 63 - k), `row ${row} column ${63 - k}`).toBe(right && right | 0x4000);
+      }
+    const px = (x: number, y: number) => wide.pixels[y * 400 + x]!;
+    for (let y = 48; y < 136; y++) {
+      // the right medallion's middle: the SNES screen's last pixel column and two more like it
+      for (let x = 328; x < 330; x++) expect(px(x, y), `${x}, ${y}`).toBe(px(327, y));
+      // the left margin mirrors the right one (the portrait aside: BG1 stays off out there)
+      for (let i = 0; i < 72; i++) expect(px(71 - i, y), `${i}, ${y}`).toBe(px(328 + i, y));
+    }
+    // drawn: the belt's lines (40-143) of the margins are not the backdrop
+    const backdrop = px(0, 10);
+    let belt = 0;
+    for (let y = 40; y < 144; y++) for (const x of [0, 40, 360, 399]) if (px(x, y) !== backdrop) belt++;
+    expect(belt).toBeGreaterThan(300);
   }, 60_000);
 
   it('classic: the menus keep black sides', () => {

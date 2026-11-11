@@ -36,8 +36,9 @@
  *
  * And what the margins of a wide picture show (`margins`), for screens whose maps do not go
  * on beyond the 256 columns: per BG layer, its map as it is (the default), nothing, or a
- * repeated patch of the layer as it shows on the screen (`Margin`); and whether sprites
- * without a real x stay inside the 256 columns.
+ * repeated patch of the layer as it shows on the screen, or its map with tiles of the margins'
+ * own (`Margin`, `marginTiles`); and whether sprites without a real x stay inside the 256
+ * columns.
  *
  * And more work RAM: with `ramExt` (set by a mode before the game runs), 6000-7FFF of banks
  * 00-3F / 80-BF (unmapped on this cartridge) reach WRAM 7E:6000-7FFF, which the game never
@@ -80,7 +81,10 @@ const HUDX_MAP = HUDX_TILES + 0x400;
 const HUDX_PALETTES = HUDX_MAP + HUDX_MAP_BYTES;
 const MARGINS = HUDX_PALETTES + 0x40;
 const RULES_BYTES = MARGINS + 2 * 16;
-const APU = RULES_BYTES + 32;
+/** the margins' own tiles (extension): bytes, 256 tiles of 4 bpp */
+export const MARGIN_TILE_BYTES = 0x2000;
+const MARGIN_TILES = RULES_BYTES + 32;
+const APU = MARGIN_TILES + MARGIN_TILE_BYTES;
 /**
  * What the wide picture's margins show (Machine.margins): per BG layer (BG1-BG3, `MARGIN_WORDS`
  * words each) its mode, then the source patch; the last word is the sprite flags.
@@ -92,6 +96,11 @@ export const Margin = {
   OFF: 1,
   /** the margins repeat a patch of the layer as it shows on the SNES screen */
   REPEAT: 2,
+  /**
+   * the layer's map goes on, its entries in the margins taking their tiles from the margins'
+   * own (`Machine.marginTiles`, tile n at n * 8 * bpp, from 0; colours from CGRAM)
+   */
+  OWN: 3,
 } as const;
 export const MARGIN_WORDS = 5;
 /**
@@ -172,6 +181,8 @@ export class Machine {
    * patch inside the screen); word MARGIN_SPRITES holds the sprite flags. All 0: the default.
    */
   readonly margins = new Int16Array(this.state.buffer, this.state.byteOffset + MARGINS, 16);
+  /** the margins' own tiles (extension, `Margin.OWN`): as a layer's in VRAM, from tile 0 */
+  readonly marginTiles = this.state.subarray(MARGIN_TILES, MARGIN_TILES + MARGIN_TILE_BYTES);
   /** 6000-7FFF of banks 00-3F / 80-BF reach WRAM (extension; config, not state) */
   ramExt = false;
   /** pixels shown beyond each side of the 256 (extension; 0 = the SNES picture) */

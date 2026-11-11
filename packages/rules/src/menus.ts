@@ -48,8 +48,8 @@ interface Patch {
   y: number;
   h: number;
 }
-/** a layer's margins: its map goes on, off, or a patch of it repeated */
-type LayerMargin = 'map' | 'off' | Patch;
+/** a layer's margins: its map goes on (with the margins' own tiles), off, or a patch of it repeated */
+type LayerMargin = 'map' | 'own' | 'off' | Patch;
 
 interface ScreenMargins {
   bg1: LayerMargin;
@@ -68,16 +68,16 @@ const SCREENS: Record<number, ScreenMargins> = {
   [Screen.MODE_SELECT]: { bg1: 'off', bg2: { x: 0, w: 48, y: 0, h: 32 } },
   // the lights and ropes (BG1) and the crowd (BG2)
   [Screen.ENTRY]: { bg1: { x: 0, w: 64, y: 0, h: 224 }, bg2: { x: 0, w: 64, y: 0, h: 224 } },
-  // the portraits (BG1) and the belt (BG2) on the backdrop
-  [Screen.SELECT]: { bg1: 'off', bg2: 'off' },
-  [Screen.TEAM_SELECT]: { bg1: 'off', bg2: 'off' },
+  // the portraits (BG1) on the backdrop, the belt (BG2) drawn on into the margins (belt())
+  [Screen.SELECT]: { bg1: 'off', bg2: 'own' },
+  [Screen.TEAM_SELECT]: { bg1: 'off', bg2: 'own' },
 };
 
 function setLayer(c: Machine, n: number, m: LayerMargin): void {
   const k = MARGIN_WORDS * n;
   const w = c.margins;
-  if (m === 'map' || m === 'off') {
-    w[k] = m === 'map' ? Margin.MAP : Margin.OFF;
+  if (typeof m === 'string') {
+    w[k] = m === 'map' ? Margin.MAP : m === 'own' ? Margin.OWN : Margin.OFF;
     return;
   }
   w[k] = Margin.REPEAT;
@@ -103,9 +103,76 @@ export function menuPicture(c: Machine, margin: number): void {
   setLayer(c, 1, s.bg2);
   if (s.bg3) setLayer(c, 2, s.bg3);
   c.margins[MARGIN_SPRITES] = 1;
+  if (screenOf(c) === Screen.SELECT || screenOf(c) === Screen.TEAM_SELECT) belt(c);
   const size = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0 ? chosenTeamSize(c) : 2;
   if (screenOf(c) === Screen.ENTRY && size > 2) extraBoxes(c, 2 * (size - 2));
   if (screenOf(c) === Screen.TEAM_SELECT && size > 2) pickedNames(c, size - 2);
+}
+
+/** the belt's BG2 columns: the side medallion's visible part (0-3, its inner side first), the strap */
+const MEDALLION_PX = 32;
+const STRAP_COL = 4;
+/** the medallion's middle, which never shows: its inner pixel column, this many more times */
+const STRETCH = 2;
+/** the belt's BG2 rows at the screen's edges (the team select's portraits are below) */
+const BELT_ROWS = [5, 17];
+const MARGIN_COLS = 9;
+
+/**
+ * The player select's belt (BG2, mirrored about the middle) goes on into the margins: each side
+ * medallion, cut by the screen's edge, is completed by its visible part mirrored, its inner
+ * pixel column (the middle, which never shows) widened STRETCH pixels; then the strap to the
+ * picture's edge. VRAM has no room for the new tiles on this screen (portraits, sprites), so
+ * they are the margins' own (Machine.marginTiles, Margin.OWN), entries in the second half of
+ * the 64-column BG2 map (empty here): the right margin's, and the left's mirrored. Redrawn
+ * every frame from the screen's own tiles.
+ */
+function belt(c: Machine): void {
+  const base = (c.ioreg[0x08]! & 0xfc) << 9;
+  const chr = ((c.ioreg[0x0b]! >> 4) & 15) << 13;
+  const vram = c.vram;
+  const at = (row: number, col: number) => base + ((col & 32) << 6) + (row * 32 + (col & 31)) * 2;
+  const get = (row: number, col: number) => vram[at(row, col)]! | (vram[at(row, col) + 1]! << 8);
+  const put = (row: number, col: number, v: number) => {
+    vram[at(row, col)] = v & 0xff;
+    vram[at(row, col) + 1] = v >> 8;
+  };
+  /** the colour index (4 bpp) of pixel x, y of map entry e */
+  const pixel = (e: number, x: number, y: number) => {
+    const t = (chr + (e & 0x3ff) * 32 + 2 * (e & 0x8000 ? 7 - y : y)) & 0xffff;
+    const bit = e & 0x4000 ? x : 7 - x;
+    return ((vram[t]! >> bit) & 1) | (((vram[t + 1]! >> bit) & 1) << 1) | (((vram[t + 16]! >> bit) & 1) << 2) | (((vram[t + 17]! >> bit) & 1) << 3);
+  };
+  /** the BG2 column and pixel a right margin pixel shows */
+  const source = (x: number): [number, number] => {
+    const m = Math.max(0, x - STRETCH);
+    return m < MEDALLION_PX ? [m >> 3, m & 7] : [STRAP_COL, (m - MEDALLION_PX) & 7];
+  };
+  const tiles = c.marginTiles;
+  tiles.fill(0, 0, 32); // tile 0: nothing (the entries off the belt)
+  let next = 1;
+  for (let row = 0; row < 32; row++)
+    for (let k = 0; k < MARGIN_COLS; k++) {
+      if (row < BELT_ROWS[0]! || row > BELT_ROWS[1]!) {
+        put(row, 32 + k, 0);
+        put(row, 63 - k, 0);
+        continue;
+      }
+      const t = next++ * 32;
+      tiles.fill(0, t, t + 32);
+      for (let i = 0; i < 8; i++) {
+        const [col, px] = source(8 * k + i);
+        const e = get(row, col);
+        for (let y = 0; y < 8; y++) {
+          const v = pixel(e, px, y);
+          for (let p = 0; p < 4; p++) if ((v >> p) & 1) tiles[t + 2 * y + (p & 1) + (p >> 1) * 16]! |= 0x80 >> i;
+        }
+      }
+      // palette and priority of the tile's first source entry (the belt's are all palette 2)
+      const entry = (get(row, source(8 * k)[0]) & 0x3c00) | (t >> 5);
+      put(row, 32 + k, entry); // the right margin
+      put(row, 63 - k, entry | 0x4000); // the left one: mirrored
+    }
 }
 
 const TEAM_FLAG = 0x1ba0;

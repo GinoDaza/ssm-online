@@ -18,15 +18,16 @@
  * maps, BG3 (the HUD) stays in the middle 256, sprites take their real x (Machine.oamWideX),
  * windows are taken at the nearest middle column, and the 32-sprite / 34-tile line limits are
  * lifted (more of the line is on screen). Otherwise the sides are black. A screen whose maps
- * do not go on can have its margins say otherwise per layer (Machine.margins): nothing, or a
- * patch of the layer repeated; and sprites without a real x can be kept inside the 256.
+ * do not go on can have its margins say otherwise per layer (Machine.margins): nothing, a
+ * patch of the layer repeated, or its map with tiles of the margins' own (Machine.marginTiles);
+ * and sprites without a real x can be kept inside the 256.
  *
  * And taller: while Machine.tall is set, the forced-blank lines above the first drawn line are
  * drawn with that line's state, and the lines from Machine.tall down with the state of the line
  * before it (after it the game is already uploading the next frame). The HUD (BG3) bands at
  * the top and bottom move to the new edges (Machine.hudTop / hudLift / hudBottom / hudDrop).
  */
-import { HUDX_COLS, HUDX_ROWS, HUDX_TILE0, MARGIN_SPRITES, MARGIN_WORDS, Margin, type Machine, OBJX_BANK2, PpuReg } from '../cpu/machine.ts';
+import { HUDX_COLS, HUDX_ROWS, HUDX_TILE0, MARGIN_SPRITES, MARGIN_TILE_BYTES, MARGIN_WORDS, Margin, type Machine, OBJX_BANK2, PpuReg } from '../cpu/machine.ts';
 
 export const WIDTH = 256;
 export const HEIGHT = 224;
@@ -341,6 +342,9 @@ export class Renderer {
               x = end;
             }
           }
+        } else if (mode === Margin.OWN) {
+          this.bgRun(n, bpp, hiDepth, loDepth, this.x0, mid, 0, Y, true);
+          this.bgRun(n, bpp, hiDepth, loDepth, mid + WIDTH, this.x1, 0, Y, true);
         }
       }
     }
@@ -354,17 +358,20 @@ export class Renderer {
 
   /**
    * Layer n's pixels from x = from to before `to`, each showing the layer at screen column
-   * x + dx (with the scroll) and at map line Y.
+   * x + dx (with the scroll) and at map line Y; with `own`, the tiles are the margins' own
+   * (Margin.OWN).
    */
-  private bgRun(n: number, bpp: number, hiDepth: number, loDepth: number, from: number, to: number, dx: number, Y: number): void {
+  private bgRun(n: number, bpp: number, hiDepth: number, loDepth: number, from: number, to: number, dx: number, Y: number, own = false): void {
     const m = this.m;
     const io = m.ioreg;
     const vram = m.vram;
+    const chr = own ? m.marginTiles : vram;
+    const chrMask = own ? MARGIN_TILE_BYTES - 1 : 0xffff;
     const sc = io[0x07 + n]!;
     const mapBase = (sc & 0xfc) << 9;
     const wide = (sc & 1) !== 0;
     const tall = (sc & 2) !== 0;
-    const charBase = ((n < 2 ? io[0x0b]! >> (4 * n) : io[0x0c]! >> (4 * (n - 2))) & 15) << 13;
+    const charBase = own ? 0 : ((n < 2 ? io[0x0b]! >> (4 * n) : io[0x0c]! >> (4 * (n - 2))) & 15) << 13;
     const big = (io[0x05]! & (0x10 << n)) !== 0;
     const ts = big ? 16 : 8;
     const shift = big ? 4 : 3;
@@ -390,11 +397,11 @@ export class Renderer {
       const col = hflip ? ts - 1 - colIn : colIn;
       const left = 8 - (X & 7);
       const tile = ((e & 0x3ff) + (col >> 3) + ((rowIn >> 3) << 4)) & 0x3ff;
-      const t = (charBase + tile * tileBytes + 2 * (rowIn & 7)) & 0xffff;
-      const p0 = vram[t]!;
-      const p1 = vram[t + 1]!;
-      const p2 = bpp === 4 ? vram[(t + 16) & 0xffff]! : 0;
-      const p3 = bpp === 4 ? vram[(t + 17) & 0xffff]! : 0;
+      const t = (charBase + tile * tileBytes + 2 * (rowIn & 7)) & chrMask;
+      const p0 = chr[t]!;
+      const p1 = chr[t + 1]!;
+      const p2 = bpp === 4 ? chr[(t + 16) & chrMask]! : 0;
+      const p3 = bpp === 4 ? chr[(t + 17) & chrMask]! : 0;
       const pal = (e >> 10) & 7;
       const palBase = bpp === 4 ? pal * 16 : pal * 4;
       const d = e & 0x2000 ? hiDepth : loDepth;
