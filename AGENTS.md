@@ -2,7 +2,8 @@
 
 Saturday Night Slam Masters (SNES), playable online: the ROM's code is translated to
 JavaScript at run time (`packages/core`), and new modes replace routines through overrides.
-Read `README.md` and `docs/architecture.md` first.
+Read `README.md` and `docs/architecture.md` first; `docs/changes/` documents each change to
+the original game.
 
 ## Commands
 

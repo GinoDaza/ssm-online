@@ -43,4 +43,5 @@ The server prints its addresses. Friends on the same LAN or VPN (Radmin VPN work
       beside the original's; their characters are picked on the player select
 - [x] Players 5-8: up to eight humans online in 3 vs 3 and 4 vs 4; a lobby of seats by team
 
-See `docs/architecture.md` for how it works.
+See `docs/architecture.md` for how it works and `docs/changes/` for each change to the
+original game.
