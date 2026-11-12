@@ -57,7 +57,18 @@ describe.skipIf(!haveRom())('the extras picked on the player select', () => {
     const extrasX = picks(g.m, 1, 2).map((p) => g.m.rom.u8(0xc0c9f1 + p));
     expect([0x6280, 0x62c0].map((d) => g.m.wram[d + 0x07])).toEqual(extrasX);
     expect(g.m.wram[0x6280 + 0x02], 'a copy of pad 3 (2)').toBe(2);
-    for (const s of SELECT.slice(-44)) g.step(padsFromScript(s));
+    // they do not blink: sprite palette 0 (attribute bits 1-3), its colour 10 + pad steady
+    expect(g.m.wram[0x6280 + 0x06]! & 0x0e).toBe(0);
+    const colour = (i: number) => g.m.cgram[2 * i]! | (g.m.cgram[2 * i + 1]! << 8);
+    const base = g.m.wram[0x6280 + 0x12]! | (g.m.wram[0x6280 + 0x13]! << 8);
+    let blinked = false;
+    for (let k = 0; k < 40; k++) {
+      g.step([0, 0, 0, 0]);
+      expect(colour(128 + 12)).toBe(base);
+      blinked ||= colour(144 + 12) !== base;
+    }
+    expect(blinked, "the cursor's marker (palette 1) blinks").toBe(true);
+    for (const s of SELECT.slice(-4)) g.step(padsFromScript(s));
     const side1 = picks(g.m, 1, 2);
     expect(side1.every((p) => p >= 0)).toBe(true);
     expect(picks(g.m, 0, 2)).toEqual([-1, -1]);

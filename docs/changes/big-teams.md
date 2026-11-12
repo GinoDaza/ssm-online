@@ -33,7 +33,9 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
   from the stage's list at the VS screen, C04226) skip the picks; the picked names show in the
   margins, in the screen's font (`menus.ts`), and each picked portrait keeps the picker's
   "1P COM" marker (C20A42 follows only the partner's cursor: when it adds itself to the draw
-  list, C20AC9, a copy of it in ext WRAM 6200-62FF goes there too at each pick's x). Sides
+  list, C20AC9, a copy of it in ext WRAM 6200-62FF goes there too at each pick's x). Only the cursor's
+  marker blinks: the copies use sprite palette 0, unused on that screen, kept as palette 1 with
+  the marker's colour steady. Sides
   nobody picks for get the first free characters (`rules/test/select.test.ts`).
 
 - Memory (`slots.ts`): low WRAM (0000-1FFF, where the wrestlers' pages 0800-0FFF are, run with D
