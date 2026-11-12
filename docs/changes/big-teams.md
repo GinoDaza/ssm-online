@@ -45,6 +45,11 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
   bank 2 (free before a match); the names move to the portraits' lower edge (BG3 rows 11 / 21).
   The frames the game spends loading the partner's portrait have no OBJ pass but still upload the
   OAM, so the pieces' flags are set again after C00369 clears them.
+- The team VS screen (`portraits.ts`, `menus.ts`): every extra, the CPU's too (the characters
+  the match will give them, `extraChars` from the selection's four), whole (10 columns) in its
+  side's margin against the picture's edge, one above the other, labelled "COM" or with a player
+  5-8's number where the original labels its portraits, its name in the margin's part of the
+  side's name box as the original writes a pair ("A", "& B").
 
 - Memory (`slots.ts`): low WRAM (0000-1FFF, where the wrestlers' pages 0800-0FFF are, run with D
   = the page) is full. `Machine.ramExt` maps 6000-7FFF of banks 00-3F / 80-BF (unmapped on this

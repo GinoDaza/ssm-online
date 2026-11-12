@@ -108,13 +108,14 @@ function jsl(c: Machine, target: number, returnTo: number): number {
 
 /**
  * The characters of the extra slots (side e & 1): those picked on the player select
- * (select.ts), the others the first of the cast nobody has, in order.
+ * (select.ts), the others the first of the cast nobody has, in order. `base`: the four slots'
+ * characters (before the match, the VS screen's: the selection's).
  */
-export function extraChars(c: Machine): number[] {
+export function extraChars(c: Machine, base = BASE.map((p) => c.wram[p + 0x01]!)): number[] {
   const size = chosenSize(c);
   if (size <= 2) return [];
   const n = size - 2;
-  const taken = new Set(BASE.map((p) => c.wram[p + 0x01]!));
+  const taken = new Set(base);
   const out: number[] = Array(2 * n).fill(-1);
   for (let e = 0; e < 2 * n; e++) {
     const pick = picks(c, e & 1, n)[e >> 1]!;

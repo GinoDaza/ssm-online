@@ -1,6 +1,6 @@
 # Menus in the wide picture
 
-The Game Mode Select, the Team Battle Royal entry and the player select fill the 400 px picture
+The Game Mode Select, the Team Battle Royal entry, the player select and the team VS screen fill the 400 px picture
 with their own backgrounds; the other screens, the title among them, keep the SNES picture
 between black sides.
 
@@ -25,7 +25,10 @@ the belt on the backdrop; the belt, BG2, mirrored about the middle, goes on into
 each side medallion, cut by the screen's edge, is completed by its visible part mirrored, its
 inner pixel column (the middle never shows) widened 2 px (a pixel each side) so it stays round, then the strap goes
 on to the picture's edge; the tiles are built pixel by pixel from the screen's own into the
-margins' bank, the entries in the second half of the 64-column BG2 map). The other screens keep the SNES picture between black sides, the
+margins' bank, the entries in the second half of the 64-column BG2 map), and the team VS screen
+(8, team play only: the singles' VS uses the same list and keeps the SNES picture; its backdrop,
+BG2 from C046A6, blue and red halves with the name boxes below, goes on into the second half of
+its 64-column map, each row's edge entry repeated; BG1 and BG3 stay inside). The other screens keep the SNES picture between black sides, the
 title (list 2) too, whose margins would only show its backdrop colour
 (`rules/test/wide-menus.test.ts`). The entry of a 3 VS 3 / 4 VS 4 also shows the extra players'
 boxes (5P and 6P beside the four original ones, 7P and 8P above them) in the HUD panels of the

@@ -4,14 +4,14 @@
  * three or four); pad 3 alone on side 1 picks that side's extras and then its partner, shown
  * by name in the right margin; side 0 (pads 1 and 2) has nobody to pick, its extras get the
  * first free characters; nobody shares a character. Pad 3's marker stays on its picks, and
- * their portraits show in the right margin.
+ * their portraits show in the right margin; the VS screen shows all four extras.
  */
 import { describe, expect, it } from 'vitest';
 import { Game, HUDX_COLS, HUDX_ROWS, padsFromScript } from '@ssm/core';
 import { installRules, teamArenaRules } from '../src/index.ts';
 import { chosenTeamSize } from '../src/menu.ts';
 import { cursorCharacter, picks } from '../src/select.ts';
-import { SHOWN } from '../src/portraits.ts';
+import { SHOWN, vsCharacters } from '../src/portraits.ts';
 import { BASE, EXTRA } from '../src/slots.ts';
 import { haveRom, loadRom } from '../../core/test/fixture.ts';
 
@@ -97,9 +97,20 @@ describe.skipIf(!haveRom())('the extras picked on the player select', () => {
     expect(panelText(g, 1)).toEqual(names);
     expect(panelText(g, 0)).toEqual([]);
     // the match: side 1's extras (6A00, 6E00) are pad 3's picks, everyone distinct
+    // the VS screen (state 0E), wide: the backdrop (BG2) in the margins, the four extras'
+    // portraits (25 pieces each) with the characters the match gives them
+    for (let k = 0; k < 2400 && state() !== 0x0e; k++) g.step([0, 0, 0, 0]);
+    for (let k = 0; k < 120; k++) g.step([0, 0, 0, 0]);
+    expect(g.m.wide).toBe(72);
+    expect(g.m.oamExtCount).toBe(100);
+    const bg2 = (g.m.ioreg[0x08]! & 0xfc) << 9;
+    const entry = (row: number, col: number) => g.m.vram[bg2 + ((col & 32) << 6) + 2 * (32 * row + (col & 31))];
+    expect([entry(10, 63), entry(10, 32), entry(25, 63), entry(25, 32)]).toEqual([entry(10, 0), entry(10, 31), entry(25, 0), entry(25, 31)]);
+    const vs = vsCharacters(g.m);
     for (let k = 0; k < 2400 && state() !== 0x1a; k++) g.step([0, 0, 0, 0]);
     for (let k = 0; k < 10; k++) g.step([0, 0, 0, 0]);
     expect([w[EXTRA[1] + 0x01], w[EXTRA[3] + 0x01]]).toEqual(side1.map((p) => cursorCharacter(g.m, p)));
+    expect(EXTRA.map((p) => w[p + 0x01])).toEqual(vs);
     const all = [...BASE, ...EXTRA].map((p) => w[p + 0x01]);
     expect(new Set(all).size).toBe(8);
     for (const p of [...BASE, ...EXTRA]) expect(w[p]! & 0x80, p.toString(16)).toBe(0x80);

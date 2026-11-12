@@ -27,7 +27,7 @@
  */
 import { HUDX_COLS, HUDX_ROWS, MARGIN_SPRITES, MARGIN_WORDS, Margin, type Machine, type Runner } from '@ssm/core';
 import { chosenTeamSize, panelsBuilt } from './menu.ts';
-import { keepPortraitFlags } from './portraits.ts';
+import { keepPortraitFlags, vsCharacters } from './portraits.ts';
 import { cursorCharacter, picks } from './select.ts';
 import { joined, playerCursor } from './players.ts';
 import { playerNumber } from './seats.ts';
@@ -39,7 +39,7 @@ const SCREEN_MASK = 0xff << SCREEN_SHIFT;
 /** VRAM lists shared by several screens (fonts, common tiles): not a screen's own */
 const SHARED = new Set([0, 34]);
 
-export const Screen = { TITLE: 2, SELECT: 3, TEAM_SELECT: 4, ENTRY: 6, MODE_SELECT: 7 } as const;
+export const Screen = { TITLE: 2, SELECT: 3, TEAM_SELECT: 4, ENTRY: 6, MODE_SELECT: 7, VS: 8 } as const;
 
 /** The last screen's VRAM list. */
 export const screenOf = (c: Machine) => (c.rulesWord & SCREEN_MASK) >>> SCREEN_SHIFT;
@@ -64,6 +64,14 @@ interface ScreenMargins {
  * go on into their maps' second halves, where they are drawn; BG3's second half is BG1's map.
  */
 const WIDE_MODE_SELECT: ScreenMargins = { bg1: 'map', bg2: 'map', bg3: 'off' };
+
+/**
+ * The team VS screen (VRAM list 8, also the singles' VS, which keeps the SNES picture): the
+ * backdrop (BG2, C046A6: blue and red halves, the name boxes below) goes on into its map's second
+ * half (vsBackdrop()); the portraits' layer (BG1) and the text (BG3) stay inside, the extras'
+ * portraits and texts are the margins' own (portraits.ts, vsTexts()).
+ */
+const TEAM_VS: ScreenMargins = { bg1: 'off', bg2: 'map', bg3: 'off' };
 
 const SCREENS: Record<number, ScreenMargins> = {
   // the panels (BG1) in the middle; the wallpaper (BG2) repeats every 6 columns and 4 rows
@@ -95,7 +103,13 @@ function setLayer(c: Machine, n: number, m: LayerMargin): void {
  */
 export function menuPicture(c: Machine, margin: number): void {
   c.margins.fill(0);
-  const s = screenOf(c) === Screen.MODE_SELECT && panelsBuilt(c) ? WIDE_MODE_SELECT : SCREENS[screenOf(c)];
+  const team = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0;
+  const s =
+    screenOf(c) === Screen.MODE_SELECT && panelsBuilt(c)
+      ? WIDE_MODE_SELECT
+      : screenOf(c) === Screen.VS
+        ? team ? TEAM_VS : undefined
+        : SCREENS[screenOf(c)];
   if (!s) {
     c.wide = 0;
     return;
@@ -106,11 +120,72 @@ export function menuPicture(c: Machine, margin: number): void {
   if (s.bg3) setLayer(c, 2, s.bg3);
   c.margins[MARGIN_SPRITES] = 1;
   if (screenOf(c) === Screen.SELECT || screenOf(c) === Screen.TEAM_SELECT) belt(c);
-  const size = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0 ? chosenTeamSize(c) : 2;
+  const size = team ? chosenTeamSize(c) : 2;
   if (screenOf(c) === Screen.ENTRY && size > 2) extraBoxes(c, 2 * (size - 2));
   if (screenOf(c) === Screen.TEAM_SELECT && size > 2) {
     pickedNames(c, size - 2);
     keepPortraitFlags(c);
+  }
+  if (screenOf(c) === Screen.VS) {
+    vsBackdrop(c);
+    if (size > 2) {
+      vsTexts(c, size - 2);
+      keepPortraitFlags(c);
+    }
+  }
+}
+
+/**
+ * The team VS screen's backdrop (BG2, 64 columns, the second half unused) into the margins: each
+ * row's edge entry repeated, the left margin's (map columns 55-63) the row's first, the right
+ * margin's (32-40) its last: the blue and red halves, the name boxes at the bottom.
+ */
+function vsBackdrop(c: Machine): void {
+  const base = (c.ioreg[0x08]! & 0xfc) << 9;
+  const vram = c.vram;
+  const at = (row: number, col: number) => (base + ((col & 32) << 6) + (row * 32 + (col & 31)) * 2) & 0xffff;
+  for (let row = 0; row < 32; row++)
+    for (const [from, edge] of [
+      [64 - MARGIN_COLS, 0],
+      [32, 31],
+    ] as const) {
+      const a = at(row, edge);
+      for (let k = 0; k < MARGIN_COLS; k++) {
+        const b = at(row, from + k);
+        vram[b] = vram[a]!;
+        vram[b + 1] = vram[a + 1]!;
+      }
+    }
+}
+
+/** the VS screen's BG3 rows: the extras' labels (their portraits' last two), the names (boxes) */
+const VS_LABEL_ROWS = [11, 21];
+const VS_NAME_ROWS = [23, 25];
+
+/**
+ * The VS screen's texts of the extras, in the screen's font, in the margins' HUD panels (BG3):
+ * on each portrait (portraits.ts) its player as the original labels its own, "COM" or a player
+ * 5-8's number, at the same place (left: its second column; right: its seventh); in the side's
+ * name box, beside the original's two names, theirs as the original writes a pair ("A", "& B").
+ */
+function vsTexts(c: Machine, n: number): void {
+  c.hudxMap.fill(0);
+  c.hudxRow = VS_LABEL_ROWS[0]!;
+  c.hudxRows = VS_NAME_ROWS[1]! + 2 - VS_LABEL_ROWS[0]!;
+  const chars = vsCharacters(c);
+  const put = (side: number, row: number, col: number, text: string) =>
+    [...text].forEach((ch, i) => {
+      const t = glyph(ch);
+      if (!t) return;
+      panelPut(c, side, row - c.hudxRow, col + i, TEXT | t);
+      panelPut(c, side, row + 1 - c.hudxRow, col + i, TEXT | (t + 1));
+    });
+  for (let e = 0; e < 2 * n; e++) {
+    const side = e & 1;
+    const k = e >> 1;
+    const label = joined(c, e) ? `${playerNumber(n + 2, 4 + e)}P` : 'COM';
+    put(side, VS_LABEL_ROWS[k]!, side === 0 ? 1 : 5, label);
+    put(side, VS_NAME_ROWS[k]!, k, `${k ? '& ' : ''}${nameOf(c, chars[e]!)}`);
   }
 }
 
@@ -188,6 +263,7 @@ const NAMES = 0xc08a37;
 const FONT_A_TO_G = [0x17, 0x19, 0x1b, 0x23, 0x25, 0x28, 0x2a];
 const FONT_H = 0x60;
 const FONT_0 = 0x01;
+const FONT_AMPERSAND = 0x5d;
 /** the game's frame counter (blinks: bit 4) */
 const FRAMES = 0x1c8e;
 const TEXT = 0x2000;
@@ -206,8 +282,9 @@ function nameOf(c: Machine, ch: number): string {
   return s;
 }
 
-/** A capital or digit's top tile in the select screen's font (0: none). */
+/** A capital, digit or & top tile in the select screen's font (0: none; the VS screen's too). */
 function glyph(ch: string): number {
+  if (ch === '&') return FONT_AMPERSAND;
   const d = ch.charCodeAt(0) - 0x30;
   if (d >= 0 && d < 10) return FONT_0 + 2 * d;
   const k = ch.charCodeAt(0) - 0x41;
