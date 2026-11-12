@@ -65,7 +65,10 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
   the CGRAM upload (C00282).
 - More sprites (`oamext.ts`): four wrestlers already fill most of the 128 OAM entries. In these
   matches a full OAM is put aside and the pass goes on in the same buffer, which becomes a
-  second OAM (`Machine.oamExt`, 128 entries drawn below the first) committed with the OAM.
+  second OAM (`Machine.oamExt`, 128 entries drawn below the first) committed with the OAM. The
+  piece in the first OAM's entry 127, which the pass tail (C1F6A6) always overwrites with its
+  hidden marker, moves to the second OAM's first entry, so no wrestler loses a piece at the
+  boundary.
 - HUD (`hud.ts`): the team HUD has four blocks across the SNES screen; the extras' (face, name,
   life bar, as C06185 / C0607D draw them) are in HUD panels beside it, in the wide picture's
   margins (Machine extension `hudx`: BG3 map entries and 64 tiles of its own, which hold the

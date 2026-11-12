@@ -12,6 +12,11 @@
  * clears up to) becomes 80. Both are committed with the next OAM DMA. A second overflow ends the
  * pass as the original's does. The drawers' per-entry flags (sprites.ts, wide.ts) are indexed
  * by oamIndex: entries of the second OAM are 128 and up.
+ *
+ * Entry 127 is the tail's: it always writes a hidden piece there (7E:33FC / 33FE). The original
+ * loses the piece drawn into it only when the OAM is full, at the end of the pass; here the pass
+ * goes on, so that piece (the middle of a wrestler) moves to the second OAM's first entry, with
+ * its two high-table bits and its flags.
  */
 import type { Machine, Runner } from '@ssm/core';
 import { EXT, bigTeams } from './slots.ts';
@@ -20,6 +25,8 @@ const OAM_BUFFER = 0x3200;
 const OAM_BYTES = 0x220;
 const FULL_CHECKS = [0xc1f73d, 0xc1f7ac, 0xc1f87d] as const;
 const TAIL = 0xc1f6a6;
+/** the OAM entry the tail keeps for itself */
+const LAST = 127;
 
 /** The OAM entry the next piece takes (0-255). */
 export const oamIndex = (c: Machine) => (c.wram[0xf4]! & 0x7f) + (bigTeams(c) && c.wram[EXT.OAM_PHASE] ? 128 : 0);
@@ -38,10 +45,15 @@ export function installOamExt(r: Runner): void {
       const w = c.wram;
       w.copyWithin(EXT.OAM_STASH, OAM_BUFFER, OAM_BUFFER + OAM_BYTES);
       w[EXT.OAM_PHASE] = 1;
-      w[0xf4] = 0;
+      // entry 127 (just stored, its bits in the high byte 1F's top two) is the second's entry 0:
+      // `$F3` as after one piece (C1F725: two RORs from the sentinel 80)
+      w.copyWithin(OAM_BUFFER, OAM_BUFFER + 4 * LAST, OAM_BUFFER + 4 * LAST + 4);
+      w[0xf4] = 1;
       w[0xf5] = 0;
-      w[0xf3] = 0x80;
-      c.wmaddr = OAM_BUFFER;
+      w[0xf3] = 0x20 | (w[OAM_BUFFER + 0x200 + 0x1f]! & 0xc0);
+      c.wmaddr = OAM_BUFFER + 4;
+      c.oamxNext[128] = c.oamxNext[LAST]!;
+      c.oamWideXNext[128] = c.oamWideXNext[LAST]!;
       // CPX #$1F as if below it: the drawer goes on
       c.c = false;
       c.z = false;
