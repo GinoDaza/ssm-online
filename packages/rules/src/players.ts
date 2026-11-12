@@ -10,7 +10,8 @@
  *   stays until the next Game Mode Select.
  * - Picking: on the team player select a joined player picks their extra's character in the
  *   margin (menus.ts shows "5P" and the cursor's name): left / right move the cursor over the
- *   free characters, a new press of a confirm button (D0F0, as C03A12) picks. The selection
+ *   free characters, a new press of a confirm button (D0F0, as C03A12) picks. Joining, moving
+ *   and picking make the pads 1-4's sounds (C028A7: 04; C03A40: 02; C03A5D: 03). The selection
  *   waits for them (C038BA), until its time runs out; an extra without a pick gets the first
  *   free character at the match start (teams.ts). The partner's picker skips their extras
  *   (select.ts).
@@ -18,9 +19,11 @@
  *   of +77 but the input gate only tells apart). The input gate C110CB builds a human's
  *   held (+91) and new (+93) words from pad +77's word at `$B0` and that pad's button
  *   assignment at `$03B2` (three bytes a pad, the options' C01B48); players 5-8 have no
- *   words there, so their extras' are built here from Machine.padsx, with pad 1's assignment.
+ *   words there, so their extras' are built here from Machine.padsx, with the default
+ *   assignment (the boot's C0:9E9B, every pad's until the options change it).
  */
 import type { Machine, Runner } from '@ssm/core';
+import { sound } from './countout.ts';
 import { RULES_BYTES, isExtra } from './slots.ts';
 
 const START = 0x1000;
@@ -32,8 +35,12 @@ const CAST = 10;
 const CURSORS_1B86 = 0x1b86;
 const STATE = 0x56;
 const SELECT_STATE = 0x0c;
-/** pad 1's button assignment: three bytes, one an action, of button bits as C110CB tests them */
-const ASSIGNMENT = 0x03b2;
+/** the default button assignment (C0:9E9B, copied to 03B2 at boot): one byte an action */
+const ASSIGNMENT = [0x40, 0x80, 0x20] as const;
+/** the select's sounds (C00B42): join (C028A7), cursor (C03A40), pick (C03A5D) */
+const SOUND_JOIN = 0x04;
+const SOUND_MOVE = 0x02;
+const SOUND_PICK = 0x03;
 
 /** Player 5 + e has joined. */
 export const joined = (c: Machine, e: number) => ((c.rulesBytes[RULES_BYTES.JOINED]! >> e) & 1) !== 0;
@@ -89,20 +96,28 @@ export function playersFrame(c: Machine, size: number, entry: boolean): void {
     rb[at] = pad & 0xff;
     rb[at + 1] = pad >> 8;
     if (e >= n) continue;
-    if (entry && fresh & START) rb[RULES_BYTES.JOINED]! |= 1 << e;
+    if (entry && fresh & START && !joined(c, e)) {
+      rb[RULES_BYTES.JOINED]! |= 1 << e;
+      sound(c, SOUND_JOIN);
+    }
     if (c.wram[STATE] !== SELECT_STATE || !joined(c, e) || pick(c, e) >= 0) continue;
     const cursor = RULES_BYTES.CURSORS + e;
     if (!rb[cursor]) rb[cursor] = free(c, 0, 0) + 1;
-    if (fresh & (LEFT | RIGHT)) rb[cursor] = free(c, rb[cursor]! - 1, fresh & RIGHT ? 1 : -1) + 1;
+    if (fresh & (LEFT | RIGHT)) {
+      rb[cursor] = free(c, rb[cursor]! - 1, fresh & RIGHT ? 1 : -1) + 1;
+      sound(c, SOUND_MOVE);
+    }
     const v = rb[cursor]! - 1;
     if (taken(c).has(v)) rb[cursor] = free(c, v, 1) + 1;
-    else if (fresh & CONFIRM) rb[RULES_BYTES.PICKS + 2 * (e & 1) + (e >> 1)] = v + 1;
+    else if (fresh & CONFIRM) {
+      rb[RULES_BYTES.PICKS + 2 * (e & 1) + (e >> 1)] = v + 1;
+      sound(c, SOUND_PICK);
+    }
   }
 }
 
 /** Player 5 + e's held word for C110CB: directions, then the three actions (bits 4-6...). */
-function heldWord(c: Machine, pad: number): number {
-  const w = c.wram;
+function heldWord(pad: number): number {
   const lo = pad & 0xff;
   const hi = pad >> 8;
   const a = ((lo >> 2) | (hi & 0xc0)) & 0xff;
@@ -115,11 +130,11 @@ function heldWord(c: Machine, pad: number): number {
     carry = out;
     return r;
   };
-  carry = a & w[ASSIGNMENT]! ? 1 : 0;
+  carry = a & ASSIGNMENT[0] ? 1 : 0;
   v = ror(v);
-  carry = carry || a & w[ASSIGNMENT + 1]! ? 1 : 0;
+  carry = carry || a & ASSIGNMENT[1] ? 1 : 0;
   v = ror(v);
-  carry = carry || a & w[ASSIGNMENT + 2]! ? 1 : 0;
+  carry = carry || a & ASSIGNMENT[2] ? 1 : 0;
   let acc = v;
   acc = ror(acc);
   acc = ror(acc);
@@ -147,7 +162,7 @@ export function installPlayers(r: Runner, size: (c: Machine) => number): void {
     const p = w[d + 0x77]!;
     if (p < 5 || !isExtra(d)) return r.original(c, 0xc110e9);
     c.tick(60 * c.fast);
-    const held = heldWord(c, c.padsx[p - 5]!);
+    const held = heldWord(c.padsx[p - 5]!);
     w[d + 0x91] = held;
     w[d + 0x93] = (held ^ w[d + 0x92]!) & held;
     return 0xc1113a;

@@ -3,6 +3,8 @@
  * and 6 join on the entry screen (START), the selection waits for them while they pick in the
  * margins, their extras (6800, 6A00) are theirs in the match (+77 = 5 / 6) and move by their
  * pads, the CPU's extras ignore players 7-8's; a rollback session with six slots restores it.
+ * Joining, moving and picking queue the pads 1-4's sounds; their buttons are the default
+ * assignment's, whatever pad 1's options say.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Game, PAD, Rollback, checksum, padsFromScript } from '@ssm/core';
@@ -17,13 +19,30 @@ const MENU = 'wait*650 start*4 wait*60 start*4 wait*220 right*4 wait*30 right*4 
   return Array<string>(Number(n)).fill(s!);
 });
 
+/** the sounds queued (C00B2C / C00B42 into 03E0) while `run` runs */
+const sounds: number[] = [];
+let listening = false;
+
 /** pads: pad 1, then players 5-8 */
-const step = (g: Game, p1: number, x: number[] = []) => g.step([p1, 0, 0, 0, 0, ...x]);
+const step = (g: Game, p1: number, x: number[] = []) => {
+  const w = g.m.wram;
+  const from = w[0xfe]!;
+  g.step([p1, 0, 0, 0, 0, ...x]);
+  if (listening) for (let o = from; o !== w[0xfe]; o = (o + 2) & 0x1e) sounds.push(w[0x3e0 + o]!);
+};
+const heard = (run: () => void) => {
+  sounds.length = 0;
+  listening = true;
+  run();
+  listening = false;
+  return [...sounds];
+};
 
 describe.skipIf(!haveRom())('players 5-8', () => {
   let fight: Uint8Array;
   let chosen: number[];
   let waited = false;
+  const heardBy: Record<string, number[]> = {};
 
   beforeAll(() => {
     const g = new Game(loadRom());
@@ -35,7 +54,9 @@ describe.skipIf(!haveRom())('players 5-8', () => {
     for (const s of MENU) step(g, padsFromScript(s)[0]!);
     for (let k = 0; k < 40; k++) step(g, 0);
     // the entry: players 5 and 6 press START
-    for (let k = 0; k < 4; k++) step(g, 0, [PAD.START, PAD.START]);
+    heardBy.join = heard(() => {
+      for (let k = 0; k < 4; k++) step(g, 0, [PAD.START, PAD.START]);
+    });
     for (let k = 0; k < 1500 && state() !== 0x0c; k++) step(g, 0);
     expect(state(), "the player select").toBe(0x0c);
     const press = (p1: number, x: number[] = []) => {
@@ -50,9 +71,9 @@ describe.skipIf(!haveRom())('players 5-8', () => {
     press(PAD.Y); // the partner
     for (let k = 0; k < 120; k++) step(g, 0);
     waited = state() === 0x0c;
+    heardBy.move = heard(() => press(0, [PAD.RIGHT]));
     press(0, [PAD.RIGHT]);
-    press(0, [PAD.RIGHT]);
-    press(0, [PAD.B]); // player 5
+    heardBy.pick = heard(() => press(0, [PAD.B])); // player 5
     press(0, [0, PAD.Y]); // player 6
     chosen = [...picks(g.m, 0, 2), ...picks(g.m, 1, 2)];
     for (let k = 0; k < 3000 && state() !== 0x1a; k++) step(g, 0);
@@ -80,6 +101,29 @@ describe.skipIf(!haveRom())('players 5-8', () => {
     expect([w[EXTRA[0] + 0x01], w[EXTRA[2] + 0x01], w[EXTRA[1] + 0x01]]).toEqual(chosen.slice(0, 3).map((p) => cursorCharacter(g.m, p)));
     expect(new Set([...BASE, ...EXTRA].map((p) => w[p + 0x01])).size).toBe(8);
   });
+
+  it('joining, moving and picking make the select sounds', () => {
+    expect(heardBy.join!.filter((s) => s === 0x04)).toHaveLength(2); // players 5 and 6, once each
+    expect(heardBy.move).toContain(0x02);
+    expect(heardBy.pick).toContain(0x03);
+  });
+
+  it("player 5's buttons are the default assignment's, not pad 1's options", () => {
+    const held = (assignment?: number[]) => {
+      const g = atFight();
+      if (assignment) g.m.wram.set(assignment, 0x03b2);
+      const out: number[] = [];
+      for (const b of [PAD.Y, PAD.B, PAD.A, PAD.X, PAD.L, PAD.R]) {
+        step(g, 0, [b]);
+        out.push(g.m.wram[EXTRA[0] + 0x91]!);
+        step(g, 0);
+      }
+      return out;
+    };
+    const def = held();
+    expect(new Set(def).size, 'the buttons do different things').toBeGreaterThan(1);
+    expect(held([0x20, 0x40, 0x80])).toEqual(def);
+  }, 60_000);
 
   it("player 5's pad drives 6800, player 7's drives nobody", () => {
     const run = (x: number[]) => {

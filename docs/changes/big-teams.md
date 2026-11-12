@@ -23,8 +23,9 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
   with four humans, C03197), pick their extra's character in the player select's margins (left /
   right, a confirm button; the selection waits for them, C038BA) and play it: the extra's +77
   (the pad number; 0 = the CPU) is 5-8, and the input gate's read of pad +77 (C110E9, the held
-  and new words +91 / +93) takes their pad, with pad 1's button assignment
-  (`rules/test/players.test.ts`).
+  and new words +91 / +93) takes their pad, with the default button assignment (C0:9E9B, 40 /
+  80 / 20: the options set pads 1-4's only). Joining, moving the cursor and picking queue the
+  pads 1-4's sounds 04 / 02 / 03 (C028A7, C03A40, C03A5D) (`rules/test/players.test.ts`).
 
 - Picking the extras (`select.ts`): on the team player select a human whose team has a CPU
   partner picks it last: the first confirmations (C03A71, which ends the partner pick) go to the
