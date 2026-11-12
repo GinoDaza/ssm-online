@@ -3,7 +3,7 @@
  * join on the Game Mode Select, which still offers the choice (the original skips it for
  * three or four); pad 3 alone on side 1 picks that side's extras and then its partner, shown
  * by name in the right margin; side 0 (pads 1 and 2) has nobody to pick, its extras get the
- * first free characters; nobody shares a character.
+ * first free characters; nobody shares a character. Pad 3's marker stays on its picks.
  */
 import { describe, expect, it } from 'vitest';
 import { Game, HUDX_COLS, HUDX_ROWS, padsFromScript } from '@ssm/core';
@@ -51,7 +51,13 @@ describe.skipIf(!haveRom())('the extras picked on the player select', () => {
     for (let f = 0; f < MENU.length || state() !== 0x0c; f++) g.step(padsFromScript(MENU[f] ?? 'wait'));
     expect(w[0x1ba4], 'three humans').toBe(3);
     expect(chosenTeamSize(g.m)).toBe(4);
-    for (const s of SELECT) g.step(padsFromScript(s));
+    // pad 3's marker ("3P" / "COM", C20A42) stays on each extra it picked: its copies (side 1's
+    // at 6280 / 62C0) are drawn at the picks' x, while it waits for the partner's confirmation
+    for (const s of SELECT.slice(0, -44)) g.step(padsFromScript(s));
+    const extrasX = picks(g.m, 1, 2).map((p) => g.m.rom.u8(0xc0c9f1 + p));
+    expect([0x6280, 0x62c0].map((d) => g.m.wram[d + 0x07])).toEqual(extrasX);
+    expect(g.m.wram[0x6280 + 0x02], 'a copy of pad 3 (2)').toBe(2);
+    for (const s of SELECT.slice(-44)) g.step(padsFromScript(s));
     const side1 = picks(g.m, 1, 2);
     expect(side1.every((p) => p >= 0)).toBe(true);
     expect(picks(g.m, 0, 2)).toEqual([-1, -1]);

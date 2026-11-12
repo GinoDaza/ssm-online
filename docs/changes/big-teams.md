@@ -31,8 +31,10 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
   team's extras (`Machine.rulesBytes`, kept until the next selection: the result screens use ext
   WRAM), the cursor moving on to the next free character. Cursors and the CPU's wrestlers (taken
   from the stage's list at the VS screen, C04226) skip the picks; the picked names show in the
-  margins, in the screen's font (`menus.ts`). Sides nobody picks for get the first free
-  characters (`rules/test/select.test.ts`).
+  margins, in the screen's font (`menus.ts`), and each picked portrait keeps the picker's
+  "1P COM" marker (C20A42 follows only the partner's cursor: when it adds itself to the draw
+  list, C20AC9, a copy of it in ext WRAM 6200-62FF goes there too at each pick's x). Sides
+  nobody picks for get the first free characters (`rules/test/select.test.ts`).
 
 - Memory (`slots.ts`): low WRAM (0000-1FFF, where the wrestlers' pages 0800-0FFF are, run with D
   = the page) is full. `Machine.ramExt` maps 6000-7FFF of banks 00-3F / 80-BF (unmapped on this

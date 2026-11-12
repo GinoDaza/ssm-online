@@ -20,6 +20,12 @@
  * selection's (C041FB, its store C04226). Sides
  * nobody picks for (the CPU's team, or two humans), and picks the time ran out on, get the
  * first free characters at the match start (teams.ts).
+ *
+ * The picker's marker (C20A42, a bank-C2 pool object a pad: "1P" over "COM") follows the
+ * partner's cursor, x = C0:C9F1[cursor]; when it adds itself to draw list 1 (C20AC9, JMP
+ * C20038: its page at 0700 + `$F6`, its depth +1B at 0640 + `$F6`) a copy of it goes there too
+ * for each extra its side picked, at that pick's x, so every picked portrait keeps the mark.
+ * The copies are whole 0x40-byte objects in ext WRAM (MARKS, free during the menus).
  */
 import type { Machine, Runner } from '@ssm/core';
 import { joined } from './players.ts';
@@ -41,6 +47,16 @@ const CURSOR_FREE = 0xc03b1b;
 const CURSOR_TAKEN = 0xc03b1e;
 const CPU_PICK = 0xc04226;
 const CPU_NEXT = 0xc04205;
+
+const MARK_LISTED = 0xc20ac9;
+const MARK_X = 0xc0c9f1;
+/** the marker copies, one a pick (ext WRAM, unused before a match) */
+const MARKS = 0x6200;
+const OBJECT_BYTES = 0x40;
+const DRAW_COUNT = 0xf6;
+const DRAW_PAGES = 0x0700;
+const DRAW_DEPTHS = 0x0640;
+const DRAW_MAX = 0x40;
 
 /** The cursor is one of the extras' picks. */
 const picked = (c: Machine, cursor: number) => {
@@ -112,5 +128,33 @@ export function installSelect(r: Runner, size: (c: Machine) => number): void {
       return CPU_NEXT;
     }
     return r.original(c, CPU_PICK);
+  });
+
+  // C20AC9 JMP C20038 (D = the pad's marker, +02 the pad): its copies at the side's picks
+  r.override(MARK_LISTED, (c) => {
+    const extras = size(c) - 2;
+    if (extras > 0) {
+      const w = c.wram;
+      const d = c.d;
+      const pad = w[d + 0x02]! & 3;
+      const phase = w[PHASE]!;
+      const side = sideOfSlot(c, c.rom.u8(PARTNER_SLOT + pad + 4 * (phase ? 1 : 0)), phase);
+      picks(c, side, extras).forEach((p, k) => {
+        // players 5-8's picks are theirs, not the marker's player's
+        if (p < 0 || joined(c, 2 * k + side)) return;
+        const n = w[DRAW_COUNT]!;
+        if (n >= DRAW_MAX) return;
+        const copy = MARKS + OBJECT_BYTES * (2 * side + k);
+        c.tick(80 * c.fast);
+        w.copyWithin(copy, d, d + OBJECT_BYTES);
+        w[copy + 0x07] = c.rom.u8(MARK_X + p);
+        w[DRAW_PAGES + n] = copy & 0xff;
+        w[DRAW_PAGES + n + 1] = copy >> 8;
+        w[DRAW_DEPTHS + n] = w[copy + 0x1b]!;
+        w[DRAW_DEPTHS + n + 1] = w[copy + 0x1c]!;
+        w[DRAW_COUNT] = n + 2;
+      });
+    }
+    return r.original(c, MARK_LISTED);
   });
 }
