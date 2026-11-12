@@ -45,8 +45,10 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
   team frame (C11BD3: input, AI and targets, motion, pair resolution, partner follow, the
   camera's stats), the contact root (C1A9C7), the object loop (C12299), the walk-in (C1F0F9),
   the ring shake (C216CB). The contact pairs (each wrestler of a team against each of the other:
-  4 in the original, a table at 1A9C) are built for 9 / 16, and the scripts hits ask for (+87)
-  run for the extras too, through a return address in a ROM gap.
+  4 in the original, a table at 1A9C) are built for 9 / 16, and the scripts hits ask for (+187)
+  run for the extras too, through a return address in a ROM gap (the reaction states wait on
+  them: without its script, an extra hit while lying (8A / 8C) never got up); then +141 is
+  cleared for every wrestler.
 - Pointers between wrestlers: +A5 the partner, +A7 / +A9 the current and previous opponent (a
   hit makes each the other's current one), +F0 / +F2 the two opponents a human's target choice
   ranks. With three or four opponents, +F0 / +F2 are the two nearest in play, and a partner or
@@ -77,4 +79,5 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
 
 `rules/test/big-teams.test.ts` plays both from power-on: every wrestler in and fighting, drawn
 from bank 2 and the second OAM, their frames and palettes changing only in the vertical blank,
+an extra hit while lying getting back down,
 the HUD panels, a time over judged with the extras' life, and a rollback in a 4 vs 4 match.

@@ -333,28 +333,28 @@ function contactPairs(c: Machine): void {
   wr16(c, EXT.PAIR_BYTES, at - EXT.PAIRS);
 }
 
-/** After the contacts: the scripts the hits asked for (+87), the extras' ones (C1AB10-C1AB45). */
+/** After the contacts: the scripts the hits asked for (+187), the extras' ones (C1AB10-C1AB45). */
 function extraScripts(c: Machine, from: number): number {
   const list = EXTRA.slice(0, extras(c));
   for (let k = from; k < list.length; k++) {
     const page = list[k]!;
-    const script = c.wram[page + 0x87]!;
+    const script = c.wram[page + 0x187]!;
     if (!script) continue;
     c.wram[EXT.CURSOR] = k + 1;
     c.d = page;
     c.setA(script, 8);
     return jsl(c, 0xc20168, SCRIPTS_RETURN);
   }
-  // C1AB46: +41 = 0 for every wrestler, then PLD / RTL
-  for (const page of pages(c)) c.wram[page + 0x41] = 0;
+  // C1AB46: +141 = 0 for every wrestler (STZ $0941 ...), then PLD / RTL
+  for (const page of pages(c)) c.wram[page + 0x141] = 0;
   c.tick(40);
   return 0xc1ab52;
 }
 
 function installContacts(r: Runner): void {
-  // C1A9D6 REP #$30 after the four +87 clears
+  // C1A9D6 REP #$30 after the four +187 clears (C1A9CA: 0987 ...)
   r.override(0xc1a9d6, (c) => {
-    if (big(c)) for (const p of EXTRA.slice(0, extras(c))) c.wram[p + 0x87] = 0;
+    if (big(c)) for (const p of EXTRA.slice(0, extras(c))) c.wram[p + 0x187] = 0;
     return r.original(c, 0xc1a9d6);
   });
   // the hit-reaction loop: forward from 0800 or, with `$1C8E` bit 15 / 14, backward from the last

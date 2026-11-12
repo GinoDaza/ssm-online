@@ -121,6 +121,25 @@ describe.skipIf(!haveRom())('3 vs 3 and 4 vs 4', () => {
     expect(during, 'lines where bank 2 changed during the picture').toEqual([]);
   }, 120_000);
 
+  it('4 VS 4: an extra hit while lying gets its reaction script and gets back down (8A / 8C)', () => {
+    const g = fight(4);
+    const w = g.m.wram;
+    const lying = new Map<number, number>();
+    let hits = 0;
+    for (let f = 0; f < 3200 && w[0x56] === 0x1a; f++) {
+      g.step([pad(0, f), pad(1, f), 0, 0]);
+      for (const p of EXTRA) {
+        const s = w[p + 0x03]!;
+        const n = s === 0x8a || s === 0x8c ? (lying.get(p) ?? 0) + 1 : 0;
+        if (n === 1) hits++;
+        lying.set(p, n);
+        // the original's reaction script lasts 20 frames, then the state goes back to 80 / 82
+        expect(n, `${p.toString(16)} in ${s.toString(16)} at ${f}`).toBeLessThan(120);
+      }
+    }
+    expect(hits, 'extras hit while lying').toBeGreaterThan(0);
+  }, 120_000);
+
   it('3 VS 3: a time over judges the teams with the extras life', () => {
     const g = fight(3);
     const w = g.m.wram;
