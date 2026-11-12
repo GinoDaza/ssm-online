@@ -1,6 +1,6 @@
 /**
  * The overrides a Ruleset needs (Runner.override, docs/architecture.md), one install per change
- * to the original (docs/changes/). Classic installs none, so the game is the original.
+ * to the original (docs/changes/). Classic installs only the default difficulty (difficulty.md).
  *
  * Everything but the Game Mode Select builds on the full arena (singlesArena): the wide and
  * full-height picture, singles and menus in it, 3 vs 3 and 4 vs 4.
@@ -8,6 +8,7 @@
 import type { Game, Runner } from '@ssm/core';
 import { createArenaObjects } from './arena.ts';
 import { installBigTeams } from './big-teams.ts';
+import { ORIGINAL_DIFFICULTY, installDifficulty } from './difficulty.ts';
 import { installFullArena } from './full-arena.ts';
 import { installMenu } from './menu.ts';
 import { Screen, installMenus, menuPicture, screenOf } from './menus.ts';
@@ -43,6 +44,7 @@ function installMatchStart(r: Runner, rules: Ruleset): void {
 /** Register the overrides of `rules` on a game (before it runs). */
 export function installRules(game: Game, rules: Ruleset): void {
   const r = game.runner;
+  if (rules.difficulty !== ORIGINAL_DIFFICULTY) installDifficulty(r, rules.difficulty); // difficulty.md
   if (rules.singlesArena) {
     installFullArena(r); // full-arena.md
     installMatchStart(r, rules);

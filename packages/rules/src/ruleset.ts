@@ -36,4 +36,9 @@ export interface Ruleset {
    * picture between black sides.
    */
   readonly wideMenus: boolean;
+  /**
+   * The OPTION difficulty at power-on, 0-7 (difficulty.ts). Original: 3; the CPU's first level
+   * follows it (3: 9, 5: 15).
+   */
+  readonly difficulty: number;
 }

@@ -33,7 +33,7 @@ tools/           compare-frames.ts / compare-video.ts (game vs emulator), disasm
   runs instead of the translated code. The address may be inside a routine: translated blocks
   end before every override, so execution always reaches it; an address takes one override (a
   second throws). New modes work this way, in `packages/rules/src/overrides.ts` (`installRules`,
-  one install per change), reading the `Ruleset`; classic installs none. `npx tsx tools/disasm.ts <address> [count]` disassembles the ROM to write them.
+  one install per change), reading the `Ruleset`; classic installs only the default difficulty (`docs/changes/difficulty.md`). `npx tsx tools/disasm.ts <address> [count]` disassembles the ROM to write them.
   `Runner.split` ends blocks at an address without replacing code and `Runner.original` runs
   the original code up to the next block end, so an override can wrap one original instruction.
 - **Determinism**: integers only; no clocks, randomness or platform APIs in `packages/core`

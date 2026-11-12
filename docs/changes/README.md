@@ -3,7 +3,7 @@
 Every way this project departs from the original game. The ROM's code runs as translated;
 each change replaces routines with TypeScript overrides (`Runner.override`, see
 `../architecture.md`) that read the room's `Ruleset` (`packages/rules/src/ruleset.ts`). The
-classic rules install none, so the game is the original.
+classic rules install only the default difficulty, so the game is otherwise the original.
 
 Each document says what changes, which `Ruleset` field turns it on, where it touches the ROM
 and which test checks it. The details of each override are in the comments of its file in
@@ -18,6 +18,7 @@ and which test checks it. The details of each override are in the comments of it
 | Game Mode Select with 1 VS 1 to 4 VS 4 | `modeMenu` | [mode-menu.md](mode-menu.md) |
 | Menus in the wide picture | `wideMenus` | [wide-menus.md](wide-menus.md) |
 | 3 vs 3 and 4 vs 4, players 5-8 | `singlesArena` + `modeMenu` | [big-teams.md](big-teams.md) |
+| Default difficulty two levels up (all modes) | `difficulty` | [difficulty.md](difficulty.md) |
 
 The modes a room can pick are in `packages/rules/src/variants.ts`: `classic` and `team-arena`
 (all of the above).
