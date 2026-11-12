@@ -2,9 +2,10 @@
  * Three humans and 4 VS 4 (menu.ts, select.ts), from power-on with a multitap: pads 2 and 3
  * join on the Game Mode Select, which still offers the choice (the original skips it for
  * three or four); pad 3 alone on side 1 picks that side's extras and then its partner, shown
- * by name in the right margin; side 0 (pads 1 and 2) has nobody to pick, its extras get the
- * first free characters; nobody shares a character. Pad 3's marker stays on its picks, and
- * their portraits show in the right margin; the VS screen shows all four extras.
+ * by name in the right margin; side 0 (pads 1 and 2, no partner) has its extras picked by
+ * pad 1 in the left margin once its own wrestler is in (players.ts); nobody shares a
+ * character. Pad 3's marker stays on its picks, and the four portraits show in the margins;
+ * the VS screen shows all four extras.
  */
 import { describe, expect, it } from 'vitest';
 import { Game, HUDX_COLS, HUDX_ROWS, padsFromScript } from '@ssm/core';
@@ -22,8 +23,8 @@ const steps = (s: string) =>
   });
 /** to the Game Mode Select, pads 2 and 3 join, 4 VS 4 (ssm-disasm inputs/R-mt3team-1.txt) */
 const MENU = steps('wait*649 start*4 wait*60 start*4 wait*220 2start*4 wait*30 3start*4 wait*30 right*4 wait*30 right*4 wait*30 right*4 wait*60 y*4');
-/** from the player select: each picks, pad 3 confirms two extras and its partner */
-const SELECT = steps('wait*80 y*4 wait*30 2y*4 wait*30 3y*4 wait*40 3right*4 wait*20 3y*4 wait*40 3right*4 wait*20 3y*4 wait*40 3y*4');
+/** from the player select: each picks, pad 1 its side's two extras, pad 3 two extras and its partner */
+const SELECT = steps('wait*80 y*4 wait*30 2y*4 wait*30 y*4 wait*30 right*4 wait*20 y*4 wait*30 3y*4 wait*40 3right*4 wait*20 3y*4 wait*40 3right*4 wait*20 3y*4 wait*40 3y*4');
 
 /** A panel's text in the select screen's font (top tiles), row by row. */
 function panelText(g: Game, panel: number): string[] {
@@ -43,7 +44,7 @@ function panelText(g: Game, panel: number): string[] {
 }
 
 describe.skipIf(!haveRom())('the extras picked on the player select', () => {
-  it('three humans, 4 VS 4: pad 3 picks its side two extras, side 0 gets the first free', () => {
+  it("three humans, 4 VS 4: pad 3 picks its side's two extras, pad 1 side 0's in the margin", () => {
     const g = new Game(loadRom());
     installRules(g, teamArenaRules);
     g.powerOn();
@@ -71,32 +72,35 @@ describe.skipIf(!haveRom())('the extras picked on the player select', () => {
     }
     expect(blinked, "the cursor's marker (palette 1) blinks").toBe(true);
     for (const s of SELECT.slice(-4)) g.step(padsFromScript(s));
-    // their portraits in the right margin (portraits.ts): 20 pieces each in the second OAM, at
-    // a real x past the screen's 256, bank 2's tiles and palettes 4-7 (side 1: extras 1 and 3)
-    expect(g.m.oamExtCount).toBe(40);
-    for (let i = 0; i < 40; i++) {
+    // their portraits in the margins (portraits.ts): 20 pieces each in the second OAM, extra
+    // e's with palette 4 + e, side 0's at a real x left of the screen, side 1's past its 256
+    expect(g.m.oamExtCount).toBe(80);
+    for (let i = 0; i < 80; i++) {
+      const e = Math.floor(i / 20);
       expect(g.m.oamx[128 + i]).toBe(6);
-      expect(g.m.oamWideX[128 + i]).toBeGreaterThanOrEqual(256);
-      expect((g.m.oamExt[4 * i + 3]! >> 1) & 7).toBe(4 + (i < 20 ? 1 : 3));
+      if (e & 1) expect(g.m.oamWideX[128 + i]).toBeGreaterThanOrEqual(256);
+      else expect(g.m.oamWideX[128 + i]).toBeLessThan(0);
+      expect((g.m.oamExt[4 * i + 3]! >> 1) & 7).toBe(4 + e);
     }
     // they stay while the game loads the partner's portrait (frames without an OBJ pass)
     for (let k = 0; k < 60; k++) {
       g.step([0, 0, 0, 0]);
       expect(g.m.oamx[128], `frame ${k}`).toBe(6);
     }
-    expect([g.m.wram[SHOWN + 1], g.m.wram[SHOWN + 3]]).toEqual(picks(g.m, 1, 2).map((p) => cursorCharacter(g.m, p) + 1));
+    const side0 = picks(g.m, 0, 2);
     const side1 = picks(g.m, 1, 2);
-    expect(side1.every((p) => p >= 0)).toBe(true);
-    expect(picks(g.m, 0, 2)).toEqual([-1, -1]);
-    // the right margin names them (BIFF .. SCORP: the game's own names)
-    const names = side1.map((p) => {
-      let at = 0xc08a37;
-      for (let k = 0; k < cursorCharacter(g.m, p); k++) at += 5 + g.m.rom.u8(at);
-      return Array.from({ length: g.m.rom.u8(at) }, (_, k) => String.fromCharCode(g.m.rom.u8(at + 4 + k))).join('');
-    });
-    expect(panelText(g, 1)).toEqual(names);
-    expect(panelText(g, 0)).toEqual([]);
-    // the match: side 1's extras (6A00, 6E00) are pad 3's picks, everyone distinct
+    expect([...side0, ...side1].every((p) => p >= 0)).toBe(true);
+    expect([0, 1, 2, 3].map((e) => g.m.wram[SHOWN + e])).toEqual([side0[0], side1[0], side0[1], side1[1]].map((p) => cursorCharacter(g.m, p!) + 1));
+    // the margins name them (BIFF .. SCORP: the game's own names)
+    const names = (side: number[]) =>
+      side.map((p) => {
+        let at = 0xc08a37;
+        for (let k = 0; k < cursorCharacter(g.m, p); k++) at += 5 + g.m.rom.u8(at);
+        return Array.from({ length: g.m.rom.u8(at) }, (_, k) => String.fromCharCode(g.m.rom.u8(at + 4 + k))).join('');
+      });
+    expect(panelText(g, 1)).toEqual(names(side1));
+    expect(panelText(g, 0)).toEqual(names(side0));
+    // the match: side 1's extras (6A00, 6E00) are pad 3's picks, side 0's pad 1's, all distinct
     // the VS screen (state 0E), wide: the backdrop (BG2) in the margins, the four extras'
     // portraits (25 pieces each) with the characters the match gives them
     for (let k = 0; k < 2400 && state() !== 0x0e; k++) g.step([0, 0, 0, 0]);
@@ -110,6 +114,7 @@ describe.skipIf(!haveRom())('the extras picked on the player select', () => {
     for (let k = 0; k < 2400 && state() !== 0x1a; k++) g.step([0, 0, 0, 0]);
     for (let k = 0; k < 10; k++) g.step([0, 0, 0, 0]);
     expect([w[EXTRA[1] + 0x01], w[EXTRA[3] + 0x01]]).toEqual(side1.map((p) => cursorCharacter(g.m, p)));
+    expect([w[EXTRA[0] + 0x01], w[EXTRA[2] + 0x01]]).toEqual(side0.map((p) => cursorCharacter(g.m, p)));
     expect(EXTRA.map((p) => w[p + 0x01])).toEqual(vs);
     const all = [...BASE, ...EXTRA].map((p) => w[p + 0x01]);
     expect(new Set(all).size).toBe(8);

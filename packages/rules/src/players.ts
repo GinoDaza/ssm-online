@@ -15,6 +15,9 @@
  *   waits for them (C038BA), until its time runs out; an extra without a pick gets the first
  *   free character at the match start (teams.ts). The partner's picker skips their extras
  *   (select.ts).
+ * - The CPU's extras of a side of two humans in pads 1-4 (a full pair: C03823 gives it no
+ *   partner picker) are picked the same way in the margin by the side's first human, once their
+ *   own wrestler is confirmed (C03ACE clears their `$1B85` bit), one after the other.
  * - Playing: the extra's +77 is the player's number (5-8; 0 is the CPU, which every reader
  *   of +77 but the input gate only tells apart). The input gate C110CB builds a human's
  *   held (+91) and new (+93) words from pad +77's word at `$B0` and that pad's button
@@ -24,7 +27,7 @@
  */
 import type { Machine, Runner } from '@ssm/core';
 import { sound } from './countout.ts';
-import { RULES_BYTES, isExtra } from './slots.ts';
+import { RULES_BYTES, isExtra, partnerSlot, sideOfSlot } from './slots.ts';
 
 const START = 0x1000;
 const LEFT = 0x0200;
@@ -35,6 +38,13 @@ const CAST = 10;
 const CURSORS_1B86 = 0x1b86;
 const STATE = 0x56;
 const SELECT_STATE = 0x0c;
+/** pads 1-4 in play (bits 0-3) */
+const HUMANS = 0x1ba0;
+/** pads 1-4 still picking their own wrestler (C03ACE clears a pad's bit) */
+const PICKING_OWN = 0x1b85;
+/** pads 1-4 that pick a CPU partner (C03823's mask, kept for the selection) */
+const PARTNER_PICKERS = 0x1b9b;
+const PHASE = 0x1b99;
 /** the default button assignment (C0:9E9B, copied to 03B2 at boot): one byte an action */
 const ASSIGNMENT = [0x40, 0x80, 0x20] as const;
 /** the select's sounds (C00B42): join (C028A7), cursor (C03A40), pick (C03A5D) */
@@ -51,7 +61,7 @@ export function resetPlayers(c: Machine): void {
   c.rulesBytes.fill(0, RULES_BYTES.CURSORS, RULES_BYTES.CURSORS + 4);
 }
 
-/** Player 5 + e's select cursor (-1: not shown yet). */
+/** Extra e's margin cursor, player 5 + e's or a margin picker's (-1: not shown). */
 export const playerCursor = (c: Machine, e: number) => c.rulesBytes[RULES_BYTES.CURSORS + e]! - 1;
 
 const pick = (c: Machine, e: number) => c.rulesBytes[RULES_BYTES.PICKS + 2 * (e & 1) + (e >> 1)]! - 1;
@@ -76,43 +86,88 @@ function free(c: Machine, from: number, dir: number): number {
   return from;
 }
 
-/** A joined player whose extra has no pick yet (the selection waits for them). */
+/** An extra a player 5-8 or a margin picker has not picked yet (the selection waits for them). */
 export function picking(c: Machine, size: number): boolean {
-  for (let e = 0; e < 2 * (size - 2); e++) if (joined(c, e) && pick(c, e) < 0) return true;
+  const n = 2 * (size - 2);
+  for (let e = 0; e < n; e++) if (joined(c, e) && pick(c, e) < 0) return true;
+  for (let side = 0; side < 2; side++) if (marginPicker(c, side) >= 0 && marginExtra(c, side, n) >= 0) return true;
   return false;
 }
 
 /**
+ * The pad (0-3) that picks side `side`'s CPU extras in the margin: the side's first human when
+ * no partner picker picks for that side (two humans there, or four in all); -1: none.
+ */
+export function marginPicker(c: Machine, side: number): number {
+  const w = c.wram;
+  const phase = w[PHASE]!;
+  for (let p = 0; p < 4; p++) if ((w[PARTNER_PICKERS]! >> p) & 1 && sideOfSlot(c, partnerSlot(c, p, phase), phase) === side) return -1;
+  for (let p = 0; p < 4; p++) if ((w[HUMANS]! >> p) & 1 && sideOfSlot(c, p, phase) === side) return p;
+  return -1;
+}
+
+/** The extra (0-3) side `side`'s margin picker picks now, with `n` extras; -1: none. */
+function marginExtra(c: Machine, side: number, n: number): number {
+  for (let e = side; e < n; e += 2) if (!joined(c, e) && pick(c, e) < 0) return e;
+  return -1;
+}
+
+/** Margin cursor e: a new press of left / right moves it, of a confirm button picks. */
+function marginStep(c: Machine, e: number, fresh: number): void {
+  const rb = c.rulesBytes;
+  const cursor = RULES_BYTES.CURSORS + e;
+  if (fresh & (LEFT | RIGHT)) {
+    rb[cursor] = free(c, rb[cursor]! - 1, fresh & RIGHT ? 1 : -1) + 1;
+    sound(c, SOUND_MOVE);
+  }
+  const v = rb[cursor]! - 1;
+  if (taken(c).has(v)) rb[cursor] = free(c, v, 1) + 1;
+  else if (fresh & CONFIRM) {
+    rb[RULES_BYTES.PICKS + 2 * (e & 1) + (e >> 1)] = v + 1;
+    sound(c, SOUND_PICK);
+  }
+}
+
+/** A pad word's new presses since last frame, its word kept at rulesBytes[at]. */
+function freshPress(c: Machine, at: number, pad: number): number {
+  const rb = c.rulesBytes;
+  const fresh = pad & ~(rb[at]! | (rb[at + 1]! << 8));
+  rb[at] = pad & 0xff;
+  rb[at + 1] = pad >> 8;
+  return fresh;
+}
+
+/**
  * Once a frame outside a match: players 5-8 join on the entry screen (`entry`) and pick on the
- * team player select. `size`: the chosen team size.
+ * team player select, and so do the margin pickers of pads 1-4. `size`: the chosen team size.
  */
 export function playersFrame(c: Machine, size: number, entry: boolean): void {
   const rb = c.rulesBytes;
   const n = size > 2 ? 2 * (size - 2) : 0;
+  const select = c.wram[STATE] === SELECT_STATE;
   for (let e = 0; e < 4; e++) {
-    const at = RULES_BYTES.LAST_PADS + 2 * e;
-    const pad = c.padsx[e]!;
-    const fresh = pad & ~(rb[at]! | (rb[at + 1]! << 8));
-    rb[at] = pad & 0xff;
-    rb[at + 1] = pad >> 8;
+    const fresh = freshPress(c, RULES_BYTES.LAST_PADS + 2 * e, c.padsx[e]!);
     if (e >= n) continue;
     if (entry && fresh & START && !joined(c, e)) {
       rb[RULES_BYTES.JOINED]! |= 1 << e;
       sound(c, SOUND_JOIN);
     }
-    if (c.wram[STATE] !== SELECT_STATE || !joined(c, e) || pick(c, e) >= 0) continue;
+    if (!select || !joined(c, e) || pick(c, e) >= 0) continue;
     const cursor = RULES_BYTES.CURSORS + e;
     if (!rb[cursor]) rb[cursor] = free(c, 0, 0) + 1;
-    if (fresh & (LEFT | RIGHT)) {
-      rb[cursor] = free(c, rb[cursor]! - 1, fresh & RIGHT ? 1 : -1) + 1;
-      sound(c, SOUND_MOVE);
-    }
-    const v = rb[cursor]! - 1;
-    if (taken(c).has(v)) rb[cursor] = free(c, v, 1) + 1;
-    else if (fresh & CONFIRM) {
-      rb[RULES_BYTES.PICKS + 2 * (e & 1) + (e >> 1)] = v + 1;
-      sound(c, SOUND_PICK);
-    }
+    marginStep(c, e, fresh);
+  }
+  const fresh = [0, 1, 2, 3].map((p) => freshPress(c, RULES_BYTES.LAST_BASE_PADS + 2 * p, c.pads[p]!));
+  if (!select || !n) return;
+  for (let side = 0; side < 2; side++) {
+    const p = marginPicker(c, side);
+    if (p < 0 || (c.wram[PICKING_OWN]! >> p) & 1) continue;
+    const e = marginExtra(c, side, n);
+    if (e < 0) continue;
+    const cursor = RULES_BYTES.CURSORS + e;
+    // the cursor shows up first: the press that confirmed their own wrestler picks nothing
+    if (!rb[cursor]) rb[cursor] = free(c, 0, 0) + 1;
+    else marginStep(c, e, fresh[p]!);
   }
 }
 

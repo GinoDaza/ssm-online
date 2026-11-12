@@ -36,10 +36,14 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
   "1P COM" marker (C20A42 follows only the partner's cursor: when it adds itself to the draw
   list, C20AC9, a copy of it in ext WRAM 6200-62FF goes there too at each pick's x). Only the cursor's
   marker blinks: the copies use sprite palette 0, unused on that screen, kept as palette 1 with
-  the marker's colour steady. Sides
-  nobody picks for get the first free characters (`rules/test/select.test.ts`).
+  the marker's colour steady. A side of two humans in pads 1-4 has no CPU partner (C03823
+  gives a full pair no picker): its first human, once their own wrestler is confirmed (C03ACE
+  clears their `$1B85` bit), picks its CPU extras one after the other with a cursor in the
+  margin, as players 5-8 do (`players.ts` `marginPicker`); the selection waits for them
+  (C038BA). The CPU's team, and picks the time ran out on, get the first free characters
+  (`rules/test/select.test.ts`).
 - The extras' portraits (`portraits.ts`): each picked extra, and the character under a player
-  5-8's cursor, shows in its side's margin as the four original portraits do (C04244: the
+  5-8's or a margin picker's cursor, shows in its side's margin as the four original portraits do (C04244: the
   character's map columns 1-8, mirrored on side 1, the tiles of WRAM list 14 + character, the
   colours at the team offset of the slot the extra mirrors, C0:A303). BG1's map has no room, so
   they are 16 x 16 sprites in the second OAM with their real x, tiles and palettes 4-7 of sprite

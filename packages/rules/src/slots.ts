@@ -43,10 +43,10 @@ export const EXT = {
 
 /**
  * Machine.rulesBytes: the extras' picks (select.ts: cursor + 1, two a side), players 5-8
- * (players.ts: who joined, their pads last frame, their select cursors + 1), the session's
- * team size (seats.ts).
+ * (players.ts: who joined, their pads last frame, the margin cursors + 1), the session's team
+ * size (seats.ts), pads 1-4 last frame (players.ts: the margin pickers').
  */
-export const RULES_BYTES = { PICKS: 0, JOINED: 4, LAST_PADS: 6, CURSORS: 14, PRESET: 18 } as const;
+export const RULES_BYTES = { PICKS: 0, JOINED: 4, LAST_PADS: 6, CURSORS: 14, PRESET: 18, LAST_BASE_PADS: 20 } as const;
 
 /** rulesWord bits 8-9: the team size of the match now on, less 2 (menu.ts owns bits 0-2) */
 const SIZE_SHIFT = 8;
@@ -100,3 +100,12 @@ export function wr16(c: Machine, a: number, v: number): void {
   c.wram[a] = v & 0xff;
   c.wram[a + 1] = (v >> 8) & 0xff;
 }
+
+const PARTNER_SLOT = 0xc0a1fa;
+const START_PLACES = 0xc0b9fe;
+
+/** The side (+17D) of slot `slot` when `phase` (`$1B99`, later `$1C88`) is set or not. */
+export const sideOfSlot = (c: Machine, slot: number, phase: number) => c.rom.u8(START_PLACES + 8 * (slot | (phase ? 4 : 0)) + 6);
+
+/** The slot whose wrestler pad `pad` (0-3) picks as the CPU partner (C0:A1FA, `$1B99` = `phase`). */
+export const partnerSlot = (c: Machine, pad: number, phase: number) => c.rom.u8(PARTNER_SLOT + pad + (phase ? 4 : 0));

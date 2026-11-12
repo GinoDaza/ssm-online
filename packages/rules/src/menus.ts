@@ -301,7 +301,7 @@ function pickedNames(c: Machine, n: number): void {
     picks(c, side, n).forEach((pick, k) => {
       const e = 2 * k + side;
       const human = joined(c, e);
-      const cursor = pick >= 0 ? pick : human ? playerCursor(c, e) : -1;
+      const cursor = pick >= 0 ? pick : playerCursor(c, e);
       if (cursor < 0) return;
       // the name under a cursor blinks; the number stays
       const blink = pick < 0 && (c.wram[FRAMES]! & 0x10) !== 0;

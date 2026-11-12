@@ -17,9 +17,10 @@
  * the last confirmation is the partner, as in the
  * original. A cursor skips the characters picked so far (C03B06's free exit, C03B1B), and so
  * do the CPU's wrestlers, which the VS screen takes from the stage's list skipping the
- * selection's (C041FB, its store C04226). Sides
- * nobody picks for (the CPU's team, or two humans), and picks the time ran out on, get the
- * first free characters at the match start (teams.ts).
+ * selection's (C041FB, its store C04226). A side of two humans (a full pair of pads: no
+ * partner, C03823) has its extras picked in the margin by its first human (players.ts). The
+ * CPU's team, and picks the time ran out on, get the first free characters at the match start
+ * (teams.ts).
  *
  * The picker's marker (C20A42, a bank-C2 pool object a pad: "1P" over "COM") follows the
  * partner's cursor, x = C0:C9F1[cursor]; when it adds itself to draw list 1 (C20AC9, JMP
@@ -33,12 +34,10 @@
 import type { Machine, Runner } from '@ssm/core';
 import { joined } from './players.ts';
 import { resetPortraits } from './portraits.ts';
-import { RULES_BYTES } from './slots.ts';
+import { RULES_BYTES, partnerSlot, sideOfSlot } from './slots.ts';
 
 const CURSORS = 0x1b86;
 const PHASE = 0x1b99;
-const PARTNER_SLOT = 0xc0a1fa;
-const START_PLACES = 0xc0b9fe;
 const CURSOR_CHARACTER = 0xc0a661;
 /** a pick is its cursor + 1; none yet */
 const NONE = 0;
@@ -93,9 +92,6 @@ const picked = (c: Machine, cursor: number) => {
 /** The character of a select cursor. */
 export const cursorCharacter = (c: Machine, cursor: number) => c.rom.u8(CURSOR_CHARACTER + cursor);
 
-/** The side (+17D) of slot `slot` when `phase` (`$1B99`, later `$1C88`) is set or not. */
-const sideOfSlot = (c: Machine, slot: number, phase: number) => c.rom.u8(START_PLACES + 8 * (slot | (phase ? 4 : 0)) + 6);
-
 /** The extras' picks of side `side` (select cursors, -1 = none), `n` at most. */
 export function picks(c: Machine, side: number, n: number): number[] {
   return Array.from({ length: n }, (_, k) => c.rulesBytes[PICKS + 2 * side + k]! - 1);
@@ -118,7 +114,7 @@ export function installSelect(r: Runner, size: (c: Machine) => number): void {
       const w = c.wram;
       const pad = c.x & 0xff;
       const phase = w[PHASE]!;
-      const slot = c.rom.u8(PARTNER_SLOT + pad + 4 * (phase ? 1 : 0));
+      const slot = partnerSlot(c, pad, phase);
       const side = sideOfSlot(c, slot, phase);
       // the next extra of the side without a pick, players 5-8's left to them (players.ts)
       const k = picks(c, side, extras).findIndex((p, k) => p < 0 && !joined(c, 2 * k + side));
@@ -165,7 +161,7 @@ export function installSelect(r: Runner, size: (c: Machine) => number): void {
       const d = c.d;
       const pad = w[d + 0x02]! & 3;
       const phase = w[PHASE]!;
-      const side = sideOfSlot(c, c.rom.u8(PARTNER_SLOT + pad + 4 * (phase ? 1 : 0)), phase);
+      const side = sideOfSlot(c, partnerSlot(c, pad, phase), phase);
       let steady = false;
       picks(c, side, extras).forEach((p, k) => {
         // players 5-8's picks are theirs, not the marker's player's

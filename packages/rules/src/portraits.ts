@@ -26,7 +26,7 @@
 import { OBJX_BANK2, type Machine } from '@ssm/core';
 import { chosenTeamSize } from './menu.ts';
 import { Screen, screenOf } from './menus.ts';
-import { joined, playerCursor } from './players.ts';
+import { playerCursor } from './players.ts';
 import { cursorCharacter, picks } from './select.ts';
 import { EXT } from './slots.ts';
 import { WRAM_LISTS, vramList } from './sprites.ts';
@@ -123,7 +123,7 @@ export function portraitSprites(c: Machine): void {
     if (vs) ch = shown[e]!;
     else {
       const pick = picks(c, side, n)[k]!;
-      const cursor = pick >= 0 ? pick : joined(c, e) ? playerCursor(c, e) : -1;
+      const cursor = pick >= 0 ? pick : playerCursor(c, e);
       if (cursor >= 0) ch = cursorCharacter(c, cursor);
     }
     if (ch < 0) continue;

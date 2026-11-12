@@ -4,9 +4,6 @@ Bugs that are understood but not fixed yet, with their cause and the planned fix
 
 ## 3 vs 3 and 4 vs 4
 
-- **Extras nobody picks get the first free characters**: a CPU extra's character is picked by
-  the human who picks the team's CPU partner (`select.ts`); a side with two humans in pads 1-4
-  has no such human, so its CPU extras get the first characters nobody has.
 - **Player numbers differ between the entry screen and the rest of the game.** The lobby and
   the team entry number players team by team (`seats.ts`: P1-P3 against P4-P6 in 3 VS 3); the
   player select's marks, the HUD and the result screens keep the pads' numbers (pad 3 is 3P
