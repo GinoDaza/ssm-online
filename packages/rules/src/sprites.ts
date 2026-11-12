@@ -39,6 +39,8 @@ const isTeam = (c: Machine) => (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0;
 
 /** VRAM lists: word pointers at C0:8BCE, read with DB = 80 (bank C0). */
 const VRAM_LISTS = 0xc08bce;
+/** WRAM lists (C0075A), the same entries: word pointers at C0:933F */
+export const WRAM_LISTS = 0xc0933f;
 const TEAM_ARENA_LIST = 73;
 const SPRITES = 0xc000;
 const TEAM_TAGS = [0xc000, 0xd000] as const;
@@ -60,15 +62,18 @@ interface Entry {
   data: Uint8Array;
 }
 
-/** Decode a VRAM list from the ROM as C00643 / C006E7 load it. */
-export function vramList(c: Machine, list: number): Entry[] {
+/**
+ * Decode a VRAM list from the ROM as C00643 / C006E7 load it (or, with `table` = WRAM_LISTS, a
+ * WRAM list as C0075A does; `dest` is then the WRAM address, bit 0 the bank).
+ */
+export function vramList(c: Machine, list: number, table = VRAM_LISTS): Entry[] {
   const u8 = (a: number) => c.rom.u8(a);
   const u16 = (a: number) => u8(a) | (u8(a + 1) << 8);
   const out: Entry[] = [];
-  for (let p = 0xc00000 | u16(VRAM_LISTS + 2 * list); ; p += 7) {
+  for (let p = 0xc00000 | u16(table + 2 * list); ; p += 7) {
     const size = u16(p);
     if (size & 1) break;
-    const dest = (u16(p + 2) << 1) & 0xffff;
+    const dest = table === VRAM_LISTS ? (u16(p + 2) << 1) & 0xffff : u16(p + 2);
     const src = u16(p + 4);
     const bank = u8(p + 6);
     const data = new Uint8Array(size);

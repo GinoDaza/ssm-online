@@ -10,10 +10,11 @@
  * the player select (single / team). Other screens keep the SNES picture between black sides,
  * the title (2) too: its margins would only show the backdrop colour.
  *
- * The team player select of a 3 VS 3 or 4 VS 4 shows the extras picked so far (select.ts) by
- * name in the margins, each side's on its side, in the screen's own font (BG3, 8 x 16: two
- * tiles a letter; the names are the game's, the text records at C0:8A37); players 5-8's with
- * their number, the name under their cursor blinking until they pick.
+ * The team player select of a 3 VS 3 or 4 VS 4 shows the extras picked so far (select.ts) in
+ * the margins, each side's on its side: their portraits (portraits.ts) and, over the portraits'
+ * lower edge, their names in the screen's own font (BG3, 8 x 16: two tiles a letter; the names
+ * are the game's, the text records at C0:8A37); players 5-8's with their number, the name under
+ * their cursor blinking until they pick.
  *
  * The entry screen of a 3 VS 3 or 4 VS 4 (the Game Mode Select's choice, menu.ts) shows the
  * extra players' boxes too, in the HUD panels (Machine.hudx) of the margins: the original's
@@ -186,8 +187,11 @@ const FONT_0 = 0x01;
 /** the game's frame counter (blinks: bit 4) */
 const FRAMES = 0x1c8e;
 const TEXT = 0x2000;
-/** the names' BG3 rows: one extra at the first, two at both */
-const NAME_ROWS = [14, 17];
+/**
+ * the names' BG3 rows: the lower edge of the extras' portraits (portraits.ts), as the original's
+ * names are of theirs (one extra: the first)
+ */
+const NAME_ROWS = [11, 21];
 
 /** A character's name (ASCII capitals) from the ROM. */
 function nameOf(c: Machine, ch: number): string {
@@ -223,7 +227,8 @@ function pickedNames(c: Machine, n: number): void {
       const label = human ? `${playerNumber(n + 2, 4 + e)}P ` : '';
       const name = label + nameOf(c, cursorCharacter(c, cursor));
       const row = NAME_ROWS[k]! - NAME_ROWS[0]!;
-      const col = side === 0 ? Math.max(0, HUDX_COLS - 1 - name.length) : Math.min(1, HUDX_COLS - name.length);
+      // from the portrait's second column, as the original's (fewer for players 5-8's long ones)
+      const col = Math.max(0, Math.min(1, HUDX_COLS - name.length));
       [...name].forEach((ch, i) => {
         const t = glyph(ch);
         if (!t || (blink && i >= label.length)) return;

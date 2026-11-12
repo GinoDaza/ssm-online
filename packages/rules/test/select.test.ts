@@ -3,13 +3,15 @@
  * join on the Game Mode Select, which still offers the choice (the original skips it for
  * three or four); pad 3 alone on side 1 picks that side's extras and then its partner, shown
  * by name in the right margin; side 0 (pads 1 and 2) has nobody to pick, its extras get the
- * first free characters; nobody shares a character. Pad 3's marker stays on its picks.
+ * first free characters; nobody shares a character. Pad 3's marker stays on its picks, and
+ * their portraits show in the right margin.
  */
 import { describe, expect, it } from 'vitest';
 import { Game, HUDX_COLS, HUDX_ROWS, padsFromScript } from '@ssm/core';
 import { installRules, teamArenaRules } from '../src/index.ts';
 import { chosenTeamSize } from '../src/menu.ts';
 import { cursorCharacter, picks } from '../src/select.ts';
+import { SHOWN } from '../src/portraits.ts';
 import { BASE, EXTRA } from '../src/slots.ts';
 import { haveRom, loadRom } from '../../core/test/fixture.ts';
 
@@ -69,6 +71,15 @@ describe.skipIf(!haveRom())('the extras picked on the player select', () => {
     }
     expect(blinked, "the cursor's marker (palette 1) blinks").toBe(true);
     for (const s of SELECT.slice(-4)) g.step(padsFromScript(s));
+    // their portraits in the right margin (portraits.ts): 20 pieces each in the second OAM, at
+    // a real x past the screen's 256, bank 2's tiles and palettes 4-7 (side 1: extras 1 and 3)
+    expect(g.m.oamExtCount).toBe(40);
+    for (let i = 0; i < 40; i++) {
+      expect(g.m.oamx[128 + i]).toBe(6);
+      expect(g.m.oamWideX[128 + i]).toBeGreaterThanOrEqual(256);
+      expect((g.m.oamExt[4 * i + 3]! >> 1) & 7).toBe(4 + (i < 20 ? 1 : 3));
+    }
+    expect([g.m.wram[SHOWN + 1], g.m.wram[SHOWN + 3]]).toEqual(picks(g.m, 1, 2).map((p) => cursorCharacter(g.m, p) + 1));
     const side1 = picks(g.m, 1, 2);
     expect(side1.every((p) => p >= 0)).toBe(true);
     expect(picks(g.m, 0, 2)).toEqual([-1, -1]);

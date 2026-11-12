@@ -5,7 +5,7 @@ VS 4). The extra wrestlers are played by players 5-8 or by the CPU.
 
 - **Ruleset:** `singlesArena` with `modeMenu` (the team size is the menu's choice). Classic
   leaves the original unchanged.
-- **Code:** `rules/src/big-teams.ts` (the install), `teams.ts`, `players.ts`, `select.ts`,
+- **Code:** `rules/src/big-teams.ts` (the install), `teams.ts`, `players.ts`, `select.ts`, `portraits.ts`,
   `slots.ts`, `referee.ts`, `sprites.ts`, `oamext.ts`, `hud.ts`, `seats.ts`
 - **Tests:** `rules/test/big-teams.test.ts`, `players.test.ts`, `select.test.ts`,
   `seats.test.ts`
@@ -37,6 +37,12 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
   marker blinks: the copies use sprite palette 0, unused on that screen, kept as palette 1 with
   the marker's colour steady. Sides
   nobody picks for get the first free characters (`rules/test/select.test.ts`).
+- The extras' portraits (`portraits.ts`): each picked extra, and the character under a player
+  5-8's cursor, shows in its side's margin as the four original portraits do (C04244: the
+  character's map columns 1-8, mirrored on side 1, the tiles of WRAM list 14 + character, the
+  colours at the team offset of the slot the extra mirrors, C0:A303). BG1's map has no room, so
+  they are 16 x 16 sprites in the second OAM with their real x, tiles and palettes 4-7 of sprite
+  bank 2 (free before a match); the names move to the portraits' lower edge (BG3 rows 11 / 21).
 
 - Memory (`slots.ts`): low WRAM (0000-1FFF, where the wrestlers' pages 0800-0FFF are, run with D
   = the page) is full. `Machine.ramExt` maps 6000-7FFF of banks 00-3F / 80-BF (unmapped on this

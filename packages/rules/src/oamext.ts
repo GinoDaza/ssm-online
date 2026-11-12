@@ -13,12 +13,16 @@
  * pass as the original's does. The drawers' per-entry flags (sprites.ts, wide.ts) are indexed
  * by oamIndex: entries of the second OAM are 128 and up.
  *
+ * Outside big matches the second OAM holds the extras' portraits on the team player select
+ * (portraits.ts), added at the tail.
+ *
  * Entry 127 is the tail's: it always writes a hidden piece there (7E:33FC / 33FE). The original
  * loses the piece drawn into it only when the OAM is full, at the end of the pass; here the pass
  * goes on, so that piece (the middle of a wrestler) moves to the second OAM's first entry, with
  * its two high-table bits and its flags.
  */
 import type { Machine, Runner } from '@ssm/core';
+import { portraitSprites } from './portraits.ts';
 import { EXT, bigTeams } from './slots.ts';
 
 const OAM_BUFFER = 0x3200;
@@ -70,7 +74,7 @@ export function installOamExt(r: Runner): void {
       w.copyWithin(OAM_BUFFER, EXT.OAM_STASH, EXT.OAM_STASH + OAM_BYTES);
       w[0xf4] = 0x80;
       w[EXT.OAM_PHASE] = 0;
-    }
+    } else if (!bigTeams(c)) portraitSprites(c);
     return r.original(c, TAIL);
   });
 }

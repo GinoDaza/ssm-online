@@ -32,6 +32,7 @@
  */
 import type { Machine, Runner } from '@ssm/core';
 import { joined } from './players.ts';
+import { resetPortraits } from './portraits.ts';
 import { RULES_BYTES } from './slots.ts';
 
 const CURSORS = 0x1b86;
@@ -105,6 +106,7 @@ export function installSelect(r: Runner, size: (c: Machine) => number): void {
   r.override(INIT_MASKS, (c) => {
     c.rulesBytes.fill(NONE, PICKS, PICKS + 4);
     c.rulesBytes.fill(0, RULES_BYTES.CURSORS, RULES_BYTES.CURSORS + 4);
+    resetPortraits(c);
     return r.original(c, INIT_MASKS);
   });
 
