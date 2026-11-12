@@ -82,6 +82,16 @@ function load(c: Machine, e: number, ch: number): void {
   c.wram[SHOWN + e] = ch + 1;
 }
 
+/**
+ * After C00369 clears Machine.oamxNext (sprites.ts, once a frame outside a match): the frames the
+ * game spends without an OBJ pass (the partner's portrait being loaded) still upload the OAM, so
+ * the portraits' pieces keep their flags.
+ */
+export function keepPortraitFlags(c: Machine): void {
+  if (screenOf(c) !== Screen.TEAM_SELECT) return;
+  c.oamxNext.fill(FLAGS, SECOND_OAM, SECOND_OAM + c.oamExtCountNext);
+}
+
 /** The selection starts: no portrait loaded (bank 2 may hold a match's tiles). */
 export function resetPortraits(c: Machine): void {
   c.wram.fill(0, SHOWN, SHOWN + 4);

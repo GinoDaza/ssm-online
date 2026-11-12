@@ -43,6 +43,8 @@ extras are players 5-8's or the CPU's. The team size is set at the match start (
   colours at the team offset of the slot the extra mirrors, C0:A303). BG1's map has no room, so
   they are 16 x 16 sprites in the second OAM with their real x, tiles and palettes 4-7 of sprite
   bank 2 (free before a match); the names move to the portraits' lower edge (BG3 rows 11 / 21).
+  The frames the game spends loading the partner's portrait have no OBJ pass but still upload the
+  OAM, so the pieces' flags are set again after C00369 clears them.
 
 - Memory (`slots.ts`): low WRAM (0000-1FFF, where the wrestlers' pages 0800-0FFF are, run with D
   = the page) is full. `Machine.ramExt` maps 6000-7FFF of banks 00-3F / 80-BF (unmapped on this

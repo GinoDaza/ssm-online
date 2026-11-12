@@ -27,6 +27,7 @@
  */
 import { HUDX_COLS, HUDX_ROWS, MARGIN_SPRITES, MARGIN_WORDS, Margin, type Machine, type Runner } from '@ssm/core';
 import { chosenTeamSize, panelsBuilt } from './menu.ts';
+import { keepPortraitFlags } from './portraits.ts';
 import { cursorCharacter, picks } from './select.ts';
 import { joined, playerCursor } from './players.ts';
 import { playerNumber } from './seats.ts';
@@ -107,7 +108,10 @@ export function menuPicture(c: Machine, margin: number): void {
   if (screenOf(c) === Screen.SELECT || screenOf(c) === Screen.TEAM_SELECT) belt(c);
   const size = (c.wram[TEAM_FLAG]! & TEAM_BIT) !== 0 ? chosenTeamSize(c) : 2;
   if (screenOf(c) === Screen.ENTRY && size > 2) extraBoxes(c, 2 * (size - 2));
-  if (screenOf(c) === Screen.TEAM_SELECT && size > 2) pickedNames(c, size - 2);
+  if (screenOf(c) === Screen.TEAM_SELECT && size > 2) {
+    pickedNames(c, size - 2);
+    keepPortraitFlags(c);
+  }
 }
 
 /** the belt's BG2 columns: the side medallion's visible part (0-3, its inner side first), the strap */

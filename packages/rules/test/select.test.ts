@@ -79,6 +79,11 @@ describe.skipIf(!haveRom())('the extras picked on the player select', () => {
       expect(g.m.oamWideX[128 + i]).toBeGreaterThanOrEqual(256);
       expect((g.m.oamExt[4 * i + 3]! >> 1) & 7).toBe(4 + (i < 20 ? 1 : 3));
     }
+    // they stay while the game loads the partner's portrait (frames without an OBJ pass)
+    for (let k = 0; k < 60; k++) {
+      g.step([0, 0, 0, 0]);
+      expect(g.m.oamx[128], `frame ${k}`).toBe(6);
+    }
     expect([g.m.wram[SHOWN + 1], g.m.wram[SHOWN + 3]]).toEqual(picks(g.m, 1, 2).map((p) => cursorCharacter(g.m, p) + 1));
     const side1 = picks(g.m, 1, 2);
     expect(side1.every((p) => p >= 0)).toBe(true);
