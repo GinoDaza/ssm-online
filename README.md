@@ -13,6 +13,16 @@ is included in this repository.
 The new modes are not perfect yet: the camera and some sprites still have small visual glitches,
 which will be fixed.
 
+## Screenshots
+
+The 4 vs 4 Team Battle Royal, from the team select to the fight.
+
+![Team select: Scorp, Stingr, Jumbo and Oni against Titan, Haggar, Biff and Gunloc](docs/screenshots/4v4-team-select.png)
+
+![The FIGHT! call of a 4 vs 4, eight wrestlers in the ring, with the HUD of the first four](docs/screenshots/4v4-fight-intro.png)
+
+![4 vs 4 in the wide picture: the HUD of all eight wrestlers across the top](docs/screenshots/4v4-in-fight-wide.png)
+
 ## Run
 
 Requirements: Node 22.12+ and your own dump of the USA ROM (see `roms/README.md`).
